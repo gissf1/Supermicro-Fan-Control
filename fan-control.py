@@ -14,6 +14,7 @@ Written by JBG 20190715
 # Import required modules
 import os, sys, re, time, configparser, statistics
 from subprocess import Popen, PIPE
+import shutil
 
 # Set up our default variables with safe values
 ZONE_A_SENSOR_NAME_SEARCH = r'^.*CPU.*$'
@@ -32,10 +33,12 @@ POLL_RATE = 5
 IGNORE_TEMP_CHANGE_AMOUNT = 1
 EXIT_ON_FAILURE = False
 DEBUG = False
+IPMITOOL = False
 
 # Wrapper for (re)reading config.ini
 def reload_config():
 	global DEBUG
+	global IPMITOOL
 	if DEBUG: sys.stdout.write('Reloading config... '); sys.stdout.flush()
 	config = configparser.ConfigParser()
 	config.read(os.path.join(os.path.dirname(__file__), './config.ini'))
@@ -59,10 +62,61 @@ def reload_config():
 	global EXIT_ON_FAILURE;           EXIT_ON_FAILURE           = config.get('General Configuration', 'Exit On IPMI Failure').lower() in ["yes", "true", "1"]
 	DEBUG = config.get('General Configuration', 'Debug Mode').lower() in ["yes", "true", "1"]
 
+	global IPMITOOL;
+	ipmitool_bin = None
+	try:
+		IPMITOOL = config.get('General Configuration', 'IPMITOOL')
+		if IPMITOOL.lower() in [ "", "0", "false", "none" ]:
+			IPMITOOL = False
+		else:
+			# validate the external command exists, or replace with False
+			ipmitool_bin = shutil.which(IPMITOOL)
+			if ipmitool_bin is None:
+				sys.stdout.write("\n\nError: Unable to find ipmitool in system path: " + IPMITOOL + "\n")
+				IPMITOOL = False
+	except configparser.NoOptionError as e:
+		if DEBUG: sys.stdout.write("\n" + str(e) + "\n")
+		IPMITOOL = False
+	# if false, use the builtin IPMICFG tool
+	if IPMITOOL == False:
+		pass
+	elif not os.path.isfile(ipmitool_bin):
+		err = "Unable to find external IPMITOOL at: " + ipmitool_bin
+		sys.stdout.write("\n\nError: " + err + "\n")
+		IPMITOOL = False
+	elif not os.access(ipmitool_bin, os.X_OK):
+		err = "Unable to execute external IPMITOOL at: " + ipmitool_bin
+		sys.stdout.write("\n\nError: " + err + "\n")
+		IPMITOOL = False
+	if DEBUG and IPMITOOL:
+		sys.stdout.write("\nUsing ipmitool: " + IPMITOOL + "\n")
+
 	if DEBUG: sys.stdout.write("done\n")
+
+# call external tool for making IPMI calls
+def call_ipmitool(params):
+	global IPMITOOL
+	IPMICWD = os.path.dirname(__file__)
+	if params[0] in [ "-raw", "-sdr" ]:
+		params[0] = params[0][1:]
+	else:
+		if DEBUG:
+			sys.stdout.write('Unknown params[0]: ' + params[0] + '\n')
+			sys.stdout.flush()
+		err = "Error: Unknown argument in call to external ipmitool: " + params[0]
+		return [-1, '', err]
+	IPMICMD = [IPMITOOL] + params
+	if DEBUG: sys.stdout.write(' ' + ' '.join(IPMICMD) + '\n')
+	process = Popen(IPMICMD, stdout=PIPE, cwd=IPMICWD)
+	(output, err) = process.communicate()
+	EXITCODE = process.wait()
+	if DEBUG: sys.stdout.write("IPMITOOL exit code: %d\n" % EXITCODE)
+	return [EXITCODE, output.decode('utf-8'), err]
 
 # Wrapper for making IPMI calls
 def call_ipmi(params):
+	global IPMITOOL
+	if IPMITOOL: return call_ipmitool(params)
 	IPMICMD = "./IPMICFG-Linux.x86"
 	IPMICWD = os.path.join(os.path.dirname(__file__), "./ipmitool/")
 	IPMICMD = [IPMICMD]	+ params
@@ -141,6 +195,13 @@ while True:
 		line[0] = line[0].strip()
 		line[1] = line[1].strip()
 		line[2] = line[2].strip()
+		# external ipmitool has a different sdr output format
+		if IPMITOOL:
+			temp = line[2]
+			line[2] = line[1]
+			line[1] = line[0]
+			line[0] = temp
+			del temp
 		if DEBUG: sys.stdout.write(line[1] + ": " + line[2] + "\n"); sys.stdout.flush()
 
 		# Check to see if we have a failed fan
