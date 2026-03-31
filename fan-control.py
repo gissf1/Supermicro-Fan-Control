@@ -266,21 +266,17 @@ def config_test():
 			l = parse_sdr_fields(line)
 			if not l: continue
 
-			for is_valid_temp in [re.match(r'\d+C\/\d+F', l[2]), re.match(r'^\d+ degrees (C|F)$', l[2])]:
-				if is_valid_temp:
-					found_valid_temp = is_valid_temp.group(0)
-					if (ZONE_A_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_A_SENSOR_TEST_MATCH:
-						found_a = True
-					if (ZONE_B_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
-						found_b = True
-					break
-				elif (not is_valid_temp) and (not example_temp_field):
-					if not re.match(r'\d+.*(C|F)|(C|F).*\d+', l[2]):
-						continue
-					if (ZONE_A_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_A_SENSOR_TEST_MATCH:
-						example_temp_field = l[2]
-					elif (ZONE_B_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
-						example_temp_field = l[2]
+			temp = get_celsius_from_field(l)
+			if temp is not None:
+				found_valid_temp = True
+				if (ZONE_A_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_A_SENSOR_TEST_MATCH:
+					found_a = True
+				if (ZONE_B_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
+					found_b = True
+			elif not example_temp_field:
+				# If parsing failed, check if it looks like a temp field to provide a helpful hint
+				if re.match(r'\d+.*(C|F)|(C|F).*\d+', l[2]):
+					example_temp_field = l[2]
 
 		if not found_valid_temp:
 			if example_temp_field:
