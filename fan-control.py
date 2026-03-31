@@ -86,7 +86,7 @@ def reload_config():
 		IPMITOOL = False
 	# if false, use the builtin IPMICFG tool
 	if IPMITOOL == False:
-		ipmitool_bin = os.path.abspath(os.path.join(os.path.dirname(__file__), "ipmitool", "IPMICFG-Linux.x86"))
+		ipmitool_bin = get_bundled_ipmicfg_binary()
 		ipmitool_desc = "bundled IPMICFG tool"
 	else:
 		ipmitool_desc = "external IPMITOOL"
@@ -133,12 +133,18 @@ def call_ipmitool(params):
 	if DEBUG: sys.stdout.write("IPMITOOL exit code: %d\n" % EXITCODE)
 	return [EXITCODE, output.decode('utf-8'), err]
 
+def get_bundled_ipmicfg_path():
+	return os.path.join(os.path.dirname(__file__), "./ipmitool/")
+
+def get_bundled_ipmicfg_binary():
+	return os.path.join(get_bundled_ipmicfg_path(), "IPMICFG-Linux.x86")
+
 # Wrapper for making IPMI calls
 def call_ipmi(params):
 	global IPMITOOL
 	if IPMITOOL: return call_ipmitool(params)
-	IPMICMD = "./IPMICFG-Linux.x86"
-	IPMICWD = os.path.join(os.path.dirname(__file__), "./ipmitool/")
+	IPMICWD = get_bundled_ipmicfg_path()
+	IPMICMD = get_bundled_ipmicfg_binary()
 	IPMICMD = [IPMICMD]	+ params
 	if DEBUG: sys.stdout.write(' ' + ' '.join(IPMICMD) + '\n')
 	process = Popen(IPMICMD, stdout=PIPE, cwd=IPMICWD)
