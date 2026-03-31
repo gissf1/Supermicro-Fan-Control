@@ -305,18 +305,8 @@ while True:
 	# Process our sensor values and grab the highest for each zone
 	for line in sensorinfo[1].split("\n"):
 		# Parse returned data if we can, otherwise ignore it
-		if "|" not in line: continue
-		line = line.rstrip().split("|")
-		line[0] = line[0].strip()
-		line[1] = line[1].strip()
-		line[2] = line[2].strip()
-		# external ipmitool has a different sdr output format
-		if IPMITOOL:
-			temp = line[2]
-			line[2] = line[1]
-			line[1] = line[0]
-			line[0] = temp
-			del temp
+		line = parse_sdr_fields(line)
+		if not line: continue
 		if DEBUG: sys.stdout.write(line[1] + ": " + line[2] + "\n"); sys.stdout.flush()
 
 		# Check to see if we have a failed fan
