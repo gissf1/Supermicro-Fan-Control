@@ -66,6 +66,7 @@ def reload_config():
 
 	global IPMITOOL;
 	ipmitool_bin = None
+	ipmitool_desc = None
 	try:
 		IPMITOOL = config.get('General Configuration', 'IPMITOOL')
 		if IPMITOOL.lower() in [ "", "0", "false", "none" ]:
@@ -85,22 +86,29 @@ def reload_config():
 		IPMITOOL = False
 	# if false, use the builtin IPMICFG tool
 	if IPMITOOL == False:
-		pass
-	elif not os.path.isfile(ipmitool_bin):
-		err = "Unable to find external IPMITOOL at: " + ipmitool_bin
+		ipmitool_bin = os.path.abspath(os.path.join(os.path.dirname(__file__), "ipmitool", "IPMICFG-Linux.x86"))
+		ipmitool_desc = "bundled IPMICFG tool"
+	else:
+		ipmitool_desc = "external IPMITOOL"
+	if not ipmitool_bin:
+		err = "Unable to find any IPMI helper while trying to find " + ipmitool_desc
 		if CONFIG_TEST:
 			raise FileNotFoundError(err)
 		if DEBUG:
 			sys.stdout.write("\n\nError: " + err + "\n")
-		IPMITOOL = False
+	elif not os.path.isfile(ipmitool_bin):
+		err = "Unable to find " + ipmitool_desc + " at: " + ipmitool_bin
+		if CONFIG_TEST:
+			raise FileNotFoundError(err)
+		if DEBUG:
+			sys.stdout.write("\n\nError: " + err + "\n")
 	elif not os.access(ipmitool_bin, os.X_OK):
-		err = "Unable to execute external IPMITOOL at: " + ipmitool_bin
+		err = "Unable to execute " + ipmitool_desc + " at: " + ipmitool_bin
 		if CONFIG_TEST:
 			raise PermissionError(err)
 		if DEBUG:
 			sys.stdout.write("\n\nError: " + err + "\n")
-		IPMITOOL = False
-	if DEBUG and IPMITOOL:
+	elif DEBUG and IPMITOOL:
 		sys.stdout.write("\nUsing ipmitool: " + IPMITOOL + "\n")
 
 	if DEBUG: sys.stdout.write("done\n")
