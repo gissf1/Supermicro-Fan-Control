@@ -198,6 +198,28 @@ def parse_sdr_fields(line):
 	# ipmicfg format: Status | Name | Value
 	return l
 
+def get_celsius_from_field(line):
+	"""Extracts Celsius temperature from an SDR field list.
+	Returns integer Celsius value or None if not a valid temperature.
+	"""
+	if not line or len(line) < 3: return None
+	val_str = line[2]
+
+	# Standard format: 40C/104F
+	match = re.search(r'(\d+)C\/', val_str)
+	if match:
+		return int(match.group(1))
+
+	# Alternate format: 40 degrees C or 104 degrees F
+	match = re.match(r'^(\d+) degrees (C|F)$', val_str)
+	if match:
+		val = int(match.group(1))
+		if match.group(2) == 'F':
+			return (val - 32) * 5 // 9
+		return val
+
+	return None
+
 def config_test():
 	"""Test configuration file for validity.
 	Return 0 if valid, 1 if invalid.
@@ -320,36 +342,18 @@ while True:
 		# Check to see if we have a failed fan
 		if ((line[0].lower() == "fail") and ("fan" in line[1].lower())): FAILED_FAN = True
 
-		# convert alternate temperature format to expected format
-		match = re.match(r'^(\d+) degrees (C|F)$', line[2])
-		if match:
-			if match.group(2) == 'F':
-				# convert from Fahrenheit to Celsius
-				celsius = (int(match.group(1)) - 32) * 5 // 9
-				line[2] = str(celsius) + "C/" + match.group(1) + "F"
-				#sys.stdout.write("F alternate format: " + line[1] + ": " + line[2] + "\n")
-			elif match.group(2) == 'C':
-				fahrenheit = (int(match.group(1)) * 9 // 5) + 32
-				line[2] = match.group(1) + "C/" + str(fahrenheit) + "F"
-				#sys.stdout.write("C alternate format: " + line[1] + ": " + line[2] + "\n")
-			elif DEBUG:
-				sys.stdout.write("Error: unknown unit in alternate format: " + line[1] + ": " + line[2] + "\n")
-		del match
-
-		# Only continue past this point of the for-loop if we have a temperature value
-		if not re.match(r'\d+C\/\d+F', line[2]): continue
+		temp = get_celsius_from_field(line)
+		if temp is None: continue
 
 		# Check to see if this sensor matches Zone A
 		if (ZONE_A_SENSOR_NAME_SEARCH.lower() in line[1].lower()) == ZONE_A_SENSOR_TEST_MATCH:
-			temp = line[2].split('C/')
-			if DEBUG: sys.stdout.write("ZONE A SENSOR MATCH: " + line[1] + " " + temp[0] + "'C\n"); sys.stdout.flush()
-			if int(temp[0]) > PEAK_ZONE_A_TEMP: PEAK_ZONE_A_TEMP = int(temp[0])
+			if DEBUG: sys.stdout.write("ZONE A SENSOR MATCH: " + line[1] + " " + str(temp) + "'C\n"); sys.stdout.flush()
+			if temp > PEAK_ZONE_A_TEMP: PEAK_ZONE_A_TEMP = temp
 
 		# Check to see if this sensor matches Zone B
 		if (ZONE_B_SENSOR_NAME_SEARCH.lower() in line[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
-			temp = line[2].split('C/')
-			if DEBUG: sys.stdout.write("ZONE B SENSOR MATCH: " + line[1] + " "+ temp[0] + "'C\n"); sys.stdout.flush()
-			if int(temp[0]) > PEAK_ZONE_B_TEMP: PEAK_ZONE_B_TEMP = int(temp[0])
+			if DEBUG: sys.stdout.write("ZONE B SENSOR MATCH: " + line[1] + " "+ str(temp) + "'C\n"); sys.stdout.flush()
+			if temp > PEAK_ZONE_B_TEMP: PEAK_ZONE_B_TEMP = temp
 
 	# Average out temp values over the last 5 samples to smooth RPM changes and output our values
 	ZONE_A_TEMP_SAMPLES.append(PEAK_ZONE_A_TEMP); ZONE_A_TEMP_SAMPLES.pop(0)
