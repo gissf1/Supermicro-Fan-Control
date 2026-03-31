@@ -207,6 +207,22 @@ while True:
 		# Check to see if we have a failed fan
 		if ((line[0].lower() == "fail") and ("fan" in line[1].lower())): FAILED_FAN = True
 
+		# convert alternate temperature format to expected format
+		match = re.match(r'^(\d+) degrees (C|F)$', line[2])
+		if match:
+			if match.group(2) == 'F':
+				# convert from Fahrenheit to Celsius
+				celsius = (int(match.group(1)) - 32) * 5 // 9
+				line[2] = str(celsius) + "C/" + match.group(1) + "F"
+				#sys.stdout.write("F alternate format: " + line[1] + ": " + line[2] + "\n")
+			elif match.group(2) == 'C':
+				fahrenheit = (int(match.group(1)) * 9 // 5) + 32
+				line[2] = match.group(1) + "C/" + str(fahrenheit) + "F"
+				#sys.stdout.write("C alternate format: " + line[1] + ": " + line[2] + "\n")
+			elif DEBUG:
+				sys.stdout.write("Error: unknown unit in alternate format: " + line[1] + ": " + line[2] + "\n")
+		del match
+
 		# Only continue past this point of the for-loop if we have a temperature value
 		if not re.match(r'\d+C\/\d+F', line[2]): continue
 
