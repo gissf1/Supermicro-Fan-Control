@@ -34,11 +34,13 @@ IGNORE_TEMP_CHANGE_AMOUNT = 1
 EXIT_ON_FAILURE = False
 DEBUG = False
 IPMITOOL = False
+CONFIG_TEST = False
 
 # Wrapper for (re)reading config.ini
 def reload_config():
 	global DEBUG
 	global IPMITOOL
+	global CONFIG_TEST
 	if DEBUG: sys.stdout.write('Reloading config... '); sys.stdout.flush()
 	config = configparser.ConfigParser()
 	config.read(os.path.join(os.path.dirname(__file__), './config.ini'))
@@ -72,7 +74,11 @@ def reload_config():
 			# validate the external command exists, or replace with False
 			ipmitool_bin = shutil.which(IPMITOOL)
 			if ipmitool_bin is None:
-				sys.stdout.write("\n\nError: Unable to find ipmitool in system path: " + IPMITOOL + "\n")
+				err = "Unable to find ipmitool in system path: " + IPMITOOL
+				if CONFIG_TEST:
+					raise FileNotFoundError(err)
+				if DEBUG:
+					sys.stdout.write("\n\nError: " + err + "\n")
 				IPMITOOL = False
 	except configparser.NoOptionError as e:
 		if DEBUG: sys.stdout.write("\n" + str(e) + "\n")
@@ -82,11 +88,17 @@ def reload_config():
 		pass
 	elif not os.path.isfile(ipmitool_bin):
 		err = "Unable to find external IPMITOOL at: " + ipmitool_bin
-		sys.stdout.write("\n\nError: " + err + "\n")
+		if CONFIG_TEST:
+			raise FileNotFoundError(err)
+		if DEBUG:
+			sys.stdout.write("\n\nError: " + err + "\n")
 		IPMITOOL = False
 	elif not os.access(ipmitool_bin, os.X_OK):
 		err = "Unable to execute external IPMITOOL at: " + ipmitool_bin
-		sys.stdout.write("\n\nError: " + err + "\n")
+		if CONFIG_TEST:
+			raise PermissionError(err)
+		if DEBUG:
+			sys.stdout.write("\n\nError: " + err + "\n")
 		IPMITOOL = False
 	if DEBUG and IPMITOOL:
 		sys.stdout.write("\nUsing ipmitool: " + IPMITOOL + "\n")
@@ -157,6 +169,109 @@ def calculate_pwm(PEAK_TEMP, MIN_TEMP, MAX_TEMP, MIN_FAN_PWM, MAX_FAN_PWM):
 	if   PWMVAL < MIN_FAN_PWM: PWMVAL = MIN_FAN_PWM # Sanitise output
 	elif PWMVAL > MAX_FAN_PWM: PWMVAL = MAX_FAN_PWM # Sanitise output
 	return int(PWMVAL)
+
+def parse_sdr_fields(line):
+	"""parse SDR fields from an IPMI response.
+	- If necessary, parses string line parameter into a list
+	- External IPMITOOL has a different 'sdr' output format than IPMICFG, so if necessary, swap SDR line field order
+	"""
+	global IPMITOOL
+	if type(line) is list:
+		l = line
+	elif type(line) is str:
+		if "|" not in line: return None
+		l = [p.strip() for p in line.rstrip().split("|")]
+	else:
+		return None
+	if len(l) < 3: return None
+	if IPMITOOL:
+		# ipmitool format: Name | Value | Status
+		return [ l[2], l[0], l[1] ]
+	# ipmicfg format: Status | Name | Value
+	return l
+
+def config_test():
+	"""Test configuration file for validity.
+	Return 0 if valid, 1 if invalid.
+	"""
+	global DEBUG
+	global IPMITOOL
+	global EXIT_ON_FAILURE
+	global CONFIG_TEST
+	CONFIG_TEST = True
+	try:
+		reload_config()
+		EXIT_ON_FAILURE = True
+		# Perform basic logical validation
+		if ZONE_A_MIN_TEMP >= ZONE_A_MAX_TEMP:
+			raise ValueError("Zone A: 'Minimum Temperature Degrees' (%d) must be less than 'Maximum Temperature Degrees' (%d)"
+					% (ZONE_A_MIN_TEMP, ZONE_A_MAX_TEMP))
+		if ZONE_B_MIN_TEMP >= ZONE_B_MAX_TEMP:
+			raise ValueError("Zone B: 'Minimum Temperature Degrees' (%d) must be less than 'Maximum Temperature Degrees' (%d)"
+					% (ZONE_B_MIN_TEMP, ZONE_B_MAX_TEMP))
+		if ZONE_A_MIN_FAN_PWM > ZONE_A_MAX_FAN_PWM:
+			raise ValueError("Zone A: 'Minimum Temperature Fan PWM' (%d) cannot be greater than 'Maximum Temperature Fan PWM' (%d)"
+					% (ZONE_A_MIN_FAN_PWM, ZONE_A_MAX_FAN_PWM))
+		if ZONE_B_MIN_FAN_PWM > ZONE_B_MAX_FAN_PWM:
+			raise ValueError("Zone B: 'Minimum Temperature Fan PWM' (%d) cannot be greater than 'Maximum Temperature Fan PWM' (%d)"
+					% (ZONE_B_MIN_FAN_PWM, ZONE_B_MAX_FAN_PWM))
+
+		for name, val in [
+				("Zone A Min Fan PWM", ZONE_A_MIN_FAN_PWM),
+				("Zone A Max Fan PWM", ZONE_A_MAX_FAN_PWM),
+				("Zone B Min Fan PWM", ZONE_B_MIN_FAN_PWM),
+				("Zone B Max Fan PWM", ZONE_B_MAX_FAN_PWM),
+				]:
+			if not (0 <= val <= 100):
+				raise ValueError("%s (%d) is invalid; must be between 0 and 100" % (name, val))
+
+		# ensure that we can get and parse output from the -sdr call
+		sensorinfo = call_ipmi(["-sdr"])
+		if sensorinfo[0] != 0:
+			raise Exception("IPMI Communication Failure (Exit Code %d) using %s: %s" %
+							(sensorinfo[0], IPMITOOL if IPMITOOL else "IPMICFG", str(sensorinfo[1]).strip()))
+		found_a, found_b, found_valid_temp = False, False, False
+		example_temp_field = False
+		for line in sensorinfo[1].split("\n"):
+			l = parse_sdr_fields(line)
+			if not l: continue
+
+			for is_valid_temp in [re.match(r'\d+C\/\d+F', l[2]), re.match(r'^\d+ degrees (C|F)$', l[2])]:
+				if is_valid_temp:
+					found_valid_temp = is_valid_temp.group(0)
+					if (ZONE_A_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_A_SENSOR_TEST_MATCH:
+						found_a = True
+					if (ZONE_B_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
+						found_b = True
+					break
+				elif (not is_valid_temp) and (not example_temp_field):
+					if not re.match(r'\d+.*(C|F)|(C|F).*\d+', l[2]):
+						continue
+					if (ZONE_A_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_A_SENSOR_TEST_MATCH:
+						example_temp_field = l[2]
+					elif (ZONE_B_SENSOR_NAME_SEARCH.lower() in l[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
+						example_temp_field = l[2]
+
+		if not found_valid_temp:
+			if example_temp_field:
+				example_temp_field = "Possible temperature field example: " + example_temp_field
+			else:
+				example_temp_field = "No potential temperature fields found."
+			raise ValueError("No temperature data found.  This system may use an unexpected data format.  " + example_temp_field)
+		if not found_a:
+			raise ValueError("No valid temperature sensors found for Zone A matching '%s'" % ZONE_A_SENSOR_NAME_SEARCH)
+		if not found_b:
+			raise ValueError("No valid temperature sensors found for Zone B matching '%s'" % ZONE_B_SENSOR_NAME_SEARCH)
+
+		sys.stdout.write("Configuration is valid and sensors detected.\n")
+		return 0
+	except Exception as e:
+		sys.stderr.write("Configuration error: " + str(e) + "\n")
+		return 1
+
+# Validate configuration if requested
+if "--configtest" in sys.argv:
+	sys.exit(config_test())
 
 # Main program loop starts here
 reload_config(); check_if_already_running();
