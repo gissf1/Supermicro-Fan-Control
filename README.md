@@ -59,7 +59,9 @@ apt-get install multiarch-support
 
 Next, find a suitable place for the scripts to live such as `/opt/FanControl/` (you may need to create that dir).
 
-Finally, run `crontab -e` and add the following line;
+Modern Ubuntu uses systemd for services, so I suggest installing the included systemd service file as described in the `Systemd Service Installation` section below.  If you prefer to use cron, you can also load it via the system cron, as described below:
+
+Run `crontab -e` and add the following line;
 
 ~~~
 @reboot /opt/FanControl/daemon.sh
@@ -80,7 +82,24 @@ Then, similar to Ubuntu instructions above, find a suitable place for the script
 * change directory to `/opt/Supermicro-Fan-Control`: `cd Supermicro-Fan-Control`
 * edit the configuration file as needed: `nano config.ini`, ensuring the IPMITOOL is set properly
 
-Finally, run `crontab -e` as under Ubuntu, or use another method to load and run it on startup.
+Finally, choose how to start the process:
+* run `crontab -e` as under the Ubuntu example
+* install the included systemd service file as described in the `Systemd Service Installation` section below.
+* use another method to load and run it on startup.
+
+#### Systemd Service Installation
+
+You can install the systemd service to manage everything through systemd:
+
+~~~bash
+ln -s /opt/Supermicro-Fan-Control/fan-control.service /etc/systemd/system/fan-control.service
+systemctl daemon-reload
+systemctl enable --now fan-control
+~~~
+
+To check the status or logs:
+* `systemctl status fan-control`
+* `journalctl -u fan-control -f`
 
 
 Hardware fan assignments

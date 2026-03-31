@@ -1,0 +1,17 @@
+[Unit]
+Description=Supermicro Fan Control Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/Supermicro-Fan-Control
+Environment=PYTHONUNBUFFERED=1
+# Validate configuration and dependencies before starting
+ExecStartPre=/usr/bin/python3 /opt/Supermicro-Fan-Control/fan-control.py --configtest
+ExecStart=/usr/bin/python3 /opt/Supermicro-Fan-Control/fan-control.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
