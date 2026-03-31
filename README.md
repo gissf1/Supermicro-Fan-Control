@@ -18,6 +18,7 @@ hopefully all Supermicro X8 / X9 / X10 / X11 boards with IPMI. I have personally
 #### Hardware
 * Supermicro X9DRi-LN4+
 * Supermicro X8SIL-F (IPMI equipped variant)
+* Supermicro X9SRW-F (IPMI equipped variant, using external ipmitool from OS repos)
 
 #### Operating Systems
 * VMWare ESXi 6.7
@@ -25,6 +26,7 @@ hopefully all Supermicro X8 / X9 / X10 / X11 boards with IPMI. I have personally
 * Ubuntu 20.04
 * Ubuntu 18.04
 * Ubuntu 16.04
+* Proxmox VE 8.4 / Debian 12 "Bookworm"
 
 For this script to work, you **MUST** have an IPMI module **AND** set your fan speeds to FULL SPEED in the BIOS otherwise
 this tool fights for control with the fans and they will spin up and down repeatedly (yo-yo'ing).
@@ -63,6 +65,23 @@ Finally, run `crontab -e` and add the following line;
 @reboot /opt/FanControl/daemon.sh
 ~~~
 
+#### Proxmox / Debian
+On Proxmox systems, I would suggest installing the ipmitool package from the operating system's repository:
+
+~~~
+sudo apt-get install ipmitool
+~~~
+
+Then, similar to Ubuntu instructions above, find a suitable place for the scripts to live such as `/opt/FanControl/`.  Personally I preferred `/opt/Supermicro-Fan-Control` because then I could just:
+* login as root
+* install git: `apt-get install git`
+* change directory to `/opt/`: `cd /opt`
+* clone the repository: `git clone 'https://github.com/jasongaunt/Supermicro-Fan-Control.git'`
+* change directory to `/opt/Supermicro-Fan-Control`: `cd Supermicro-Fan-Control`
+* edit the configuration file as needed: `nano config.ini`, ensuring the IPMITOOL is set properly
+
+Finally, run `crontab -e` as under Ubuntu, or use another method to load and run it on startup.
+
 
 Hardware fan assignments
 ------------------------
@@ -83,6 +102,8 @@ Supermicro assume Zone A is used for cooling the main system and Zone B for cool
 
 * Zone A = Anything that cools the CPU, memory and motherboard
 * Zone B = Anything that cools PCIe cards and / or drive bays
+
+For at least one Supermicro X9SRW-F board in a 2U case, it seemed these were reversed, so YMMV.
 
 #### Desktop cases
 
@@ -166,3 +187,7 @@ PWM%
 The values included in `config.ini` by default are sane values to start with. Good luck!
 
 ~ JG
+
+#### Hushing Loud Server Fans
+
+The fans on my X9SRW-F 2U server were extremely loud by default, even with no load and CPU at 30C.  I set 1% fan speed with ~25C/77F ambient room temperature causing my low TDP CPU to idle at 31C with the fans almost silent.  In this same configuration with 1% fan speed, my CPU only got up to around 45C at full load.  To be safe, I made sure to set my minimum temperature to 33C, and kept my 100% speed threshold far below the CPU thermal limits, but YMMV.  -BG
