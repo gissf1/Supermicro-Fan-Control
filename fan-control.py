@@ -113,26 +113,6 @@ def reload_config():
 
 	if DEBUG: sys.stdout.write("done\n")
 
-# call external tool for making IPMI calls
-def call_ipmitool(params):
-	global IPMITOOL
-	IPMICWD = os.path.dirname(__file__)
-	if params[0] in [ "-raw", "-sdr" ]:
-		params[0] = params[0][1:]
-	else:
-		if DEBUG:
-			sys.stdout.write('Unknown params[0]: ' + params[0] + '\n')
-			sys.stdout.flush()
-		err = "Error: Unknown argument in call to external ipmitool: " + params[0]
-		return [-1, '', err]
-	IPMICMD = [IPMITOOL] + params
-	if DEBUG: sys.stdout.write(' ' + ' '.join(IPMICMD) + '\n')
-	process = Popen(IPMICMD, stdout=PIPE, cwd=IPMICWD)
-	(output, err) = process.communicate()
-	EXITCODE = process.wait()
-	if DEBUG: sys.stdout.write("IPMITOOL exit code: %d\n" % EXITCODE)
-	return [EXITCODE, output.decode('utf-8'), err]
-
 def get_bundled_ipmicfg_path():
 	return os.path.join(os.path.dirname(__file__), "./ipmitool/")
 
@@ -142,9 +122,23 @@ def get_bundled_ipmicfg_binary():
 # Wrapper for making IPMI calls
 def call_ipmi(params):
 	global IPMITOOL
-	if IPMITOOL: return call_ipmitool(params)
-	IPMICWD = get_bundled_ipmicfg_path()
-	IPMICMD = get_bundled_ipmicfg_binary()
+	if IPMITOOL:
+		# External ipmitool prefers commands without the leading dash
+		IPMICWD = os.path.dirname(__file__)
+		IPMICMD = IPMITOOL
+		if params[0] in ["-raw", "-sdr"]:
+			params[0] = params[0][1:]
+		else:
+			if DEBUG:
+				sys.stdout.write('Unknown params[0]: ' + params[0] + '\n')
+				sys.stdout.flush()
+			err = "Error: Unknown argument in call to external ipmitool: " + params[0]
+			return [-1, '', err]
+	else:
+		# Bundled ipmicfg tool logic
+		IPMICWD = get_bundled_ipmicfg_path()
+		IPMICMD = get_bundled_ipmicfg_binary()
+
 	IPMICMD = [IPMICMD]	+ params
 	if DEBUG: sys.stdout.write(' ' + ' '.join(IPMICMD) + '\n')
 	process = Popen(IPMICMD, stdout=PIPE, cwd=IPMICWD)
