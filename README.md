@@ -27,6 +27,7 @@ hopefully all Supermicro X8 / X9 / X10 / X11 boards with IPMI. I have personally
 * Ubuntu 18.04
 * Ubuntu 16.04
 * Proxmox VE 8.4 / Debian 12 "Bookworm"
+* Proxmox VE 9 / Debian 13 "Trixie"
 
 For this script to work, you **MUST** have an IPMI module **AND** set your fan speeds to FULL SPEED in the BIOS otherwise
 this tool fights for control with the fans and they will spin up and down repeatedly (yo-yo'ing).
