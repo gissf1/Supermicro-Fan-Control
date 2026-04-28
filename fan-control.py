@@ -350,10 +350,10 @@ while True:
 
 	# Average out temp values over the last 5 samples to smooth RPM changes and output our values
 	ZONE_A_TEMP_SAMPLES.append(PEAK_ZONE_A_TEMP); ZONE_A_TEMP_SAMPLES.pop(0)
-	FINAL_ZONE_A_TEMP = int(statistics.mean(ZONE_A_TEMP_SAMPLES))
+	FINAL_ZONE_A_TEMP = statistics.mean(ZONE_A_TEMP_SAMPLES)
 	ZONE_B_TEMP_SAMPLES.append(PEAK_ZONE_B_TEMP); ZONE_B_TEMP_SAMPLES.pop(0)
-	FINAL_ZONE_B_TEMP = int(statistics.mean(ZONE_B_TEMP_SAMPLES))
-	sys.stdout.write("\nMaximum Zone A temp = " + str(PEAK_ZONE_A_TEMP) + "'C, averaged " + str(FINAL_ZONE_A_TEMP) + "'C\nMaximum Zone B temp = " + str(PEAK_ZONE_B_TEMP) + "'C, averaged " + str(FINAL_ZONE_B_TEMP) + "'C\n"); sys.stdout.flush()
+	FINAL_ZONE_B_TEMP = statistics.mean(ZONE_B_TEMP_SAMPLES)
+	sys.stdout.write("\nMaximum Zone A temp = " + str(PEAK_ZONE_A_TEMP) + "'C, averaged " + str(int(FINAL_ZONE_A_TEMP)) + "'C\nMaximum Zone B temp = " + str(PEAK_ZONE_B_TEMP) + "'C, averaged " + str(int(FINAL_ZONE_B_TEMP)) + "'C\n"); sys.stdout.flush()
 
 	# Calculate our fan PWM values
 	if FAILED_FAN:
