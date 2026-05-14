@@ -35,6 +35,7 @@ EXIT_ON_FAILURE = False
 DEBUG = False
 IPMITOOL = False
 CONFIG_TEST = False
+TERSE_OUTPUT = False
 
 # Wrapper for (re)reading config.ini
 def reload_config():
@@ -296,6 +297,10 @@ def config_test():
 if "--configtest" in sys.argv:
 	sys.exit(config_test())
 
+# determine if we should use terse log output mode
+if "--terse-output" in sys.argv:
+	TERSE_OUTPUT = True
+
 # Main program loop starts here
 reload_config(); check_if_already_running();
 ZONE_A_TEMP_SAMPLES = [ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP]
@@ -303,6 +308,7 @@ ZONE_A_LAST_PWM = 0
 ZONE_B_TEMP_SAMPLES = [ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP]
 ZONE_B_LAST_PWM = 0
 USE_ALT_COMMANDS=True
+LAST_OUTPUT_LINE=""
 while True:
 	# Reset variables
 	PEAK_ZONE_A_TEMP = 0
@@ -314,8 +320,9 @@ while True:
 	FAILED_FAN = False
 	reload_config()
 
-	# Print time
-	sys.stdout.write('\nTimestamp of run: ' + time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + ' UTC\n=========================================\n'); sys.stdout.flush()
+	if not TERSE_OUTPUT:
+		# Print time
+		sys.stdout.write('\nTimestamp of run: ' + time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + ' UTC\n=========================================\n'); sys.stdout.flush()
 
 	# Get sensor values from IPMI
 	sensorinfo = call_ipmi(["-sdr"])
@@ -357,7 +364,20 @@ while True:
 	AVG_ZONE_B_TEMP = statistics.mean(ZONE_B_TEMP_SAMPLES)
 	MAX_ZONE_B_TEMP = max(ZONE_B_TEMP_SAMPLES)
 	FINAL_ZONE_B_TEMP = (MAX_ZONE_B_TEMP + AVG_ZONE_B_TEMP) / 2
-	sys.stdout.write("\nMaximum Zone A temp = " + str(PEAK_ZONE_A_TEMP) + "'C, averaged " + str(int(AVG_ZONE_A_TEMP)) + "'C\nMaximum Zone B temp = " + str(PEAK_ZONE_B_TEMP) + "'C, averaged " + str(int(AVG_ZONE_B_TEMP)) + "'C\n"); sys.stdout.flush()
+	if not TERSE_OUTPUT:
+		sys.stdout.write("\nMaximum Zone A temp = " + str(PEAK_ZONE_A_TEMP) + "'C, averaged " + str(int(AVG_ZONE_A_TEMP)) + "'C\nMaximum Zone B temp = " + str(PEAK_ZONE_B_TEMP) + "'C, averaged " + str(int(AVG_ZONE_B_TEMP)) + "'C\n"); sys.stdout.flush()
+	else:
+		output_line = ("Zone Temps (Now/Avg/Max): " +
+			"A " + str(PEAK_ZONE_A_TEMP) + "'C " +
+			"/ " + str(int(AVG_ZONE_A_TEMP)) + "'C " +
+			"/ " + str(int(MAX_ZONE_A_TEMP)) + "'C; " +
+			"B " + str(PEAK_ZONE_B_TEMP) + "'C " +
+			"/ " + str(int(AVG_ZONE_B_TEMP)) + "'C " +
+			"/ " + str(int(MAX_ZONE_B_TEMP)) + "'C\n")
+		if output_line != LAST_OUTPUT_LINE:
+			sys.stdout.write(output_line);
+			sys.stdout.flush()
+			LAST_OUTPUT_LINE = output_line
 
 	# Calculate our fan PWM values
 	if FAILED_FAN:
@@ -387,7 +407,7 @@ while True:
 				if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
 			else: sys.stdout.write("success!\n"); sys.stdout.flush()
 		ZONE_A_LAST_PWM = ZONE_A_FINAL_PWM
-	else:
+	elif not TERSE_OUTPUT:
 		sys.stdout.write('Not setting our Zone A fan PWM, little to no change since last time (' + str(ZONE_A_FINAL_PWM) + '%).\n'); sys.stdout.flush()
 
 	if abs(ZONE_B_FINAL_PWM - ZONE_B_LAST_PWM) > IGNORE_TEMP_CHANGE_AMOUNT:
@@ -406,7 +426,7 @@ while True:
 				if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
 			else: sys.stdout.write("success!\n"); sys.stdout.flush()
 		ZONE_B_LAST_PWM = ZONE_B_FINAL_PWM
-	else:
+	elif not TERSE_OUTPUT:
 		sys.stdout.write('Not setting our Zone B fan PWM, little to no change since last time (' + str(ZONE_B_FINAL_PWM) + '%).\n'); sys.stdout.flush()
 
 	sys.stdout.flush()
