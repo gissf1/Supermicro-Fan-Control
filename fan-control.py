@@ -36,6 +36,7 @@ EXIT_ON_FAILURE = False
 DEBUG = False
 IPMITOOL = False
 CONFIG_TEST = False
+PREV_CONFIG_MTIME = None
 TERSE_OUTPUT = False
 
 # Wrapper for (re)reading config.ini
@@ -43,9 +44,30 @@ def reload_config():
 	global DEBUG
 	global IPMITOOL
 	global CONFIG_TEST
-	if DEBUG: sys.stdout.write('Reloading config... '); sys.stdout.flush()
+	global PREV_CONFIG_MTIME
+
+	config_path = os.path.join(os.path.dirname(__file__), './config.ini')
+
+	# Check if config.ini has been updated
+	if os.path.exists(config_path) == False:
+		if PREV_CONFIG_MTIME is None:
+			print('WARNING: No configuration found. Assuming default values for now.')
+			return
+		else:
+			print('Configuration file has disappeared; using last known configuration values.')
+			return
+	config_mtime = os.path.getmtime(config_path)
+	if PREV_CONFIG_MTIME == config_mtime:
+		return
+	if PREV_CONFIG_MTIME is not None:
+		# Ensure the file is at least 1 second old to avoid partial reads during writes
+		if (time.time() - config_mtime) < 1.0:
+			return
+		sys.stdout.write('Configuration has changed. Reloading... ')
+		sys.stdout.flush()
+
 	config = configparser.ConfigParser()
-	config.read(os.path.join(os.path.dirname(__file__), './config.ini'))
+	config.read(config_path)
 
 	global ZONE_A_SENSOR_NAME_SEARCH; ZONE_A_SENSOR_NAME_SEARCH = config.get('Fan Zone A', 'Sensor Name Search')
 	global ZONE_A_SENSOR_TEST_MATCH;  ZONE_A_SENSOR_TEST_MATCH  = config.get('Fan Zone A', 'Sensor Test Match').lower() in ["yes", "true", "1"]
@@ -120,6 +142,7 @@ def reload_config():
 	elif DEBUG and IPMITOOL:
 		sys.stdout.write("\nUsing ipmitool: " + IPMITOOL + "\n")
 
+	PREV_CONFIG_MTIME = config_mtime
 	if DEBUG: sys.stdout.write("done\n")
 
 def get_bundled_ipmicfg_binary():
