@@ -392,12 +392,22 @@ while True:
 
 	# Average out temp values over the last AVERAGE_WINDOW samples to smooth RPM changes and output our values
 	ZONE_A_TEMP_SAMPLES.append(PEAK_ZONE_A_TEMP)
-	while len(ZONE_A_TEMP_SAMPLES) > AVERAGE_WINDOW: ZONE_A_TEMP_SAMPLES.pop(0)
+	if len(ZONE_A_TEMP_SAMPLES) < AVERAGE_WINDOW:
+		# if we have enough real samples, drop the default samples to stabilize fan speeds sooner
+		if len(ZONE_A_TEMP_SAMPLES) == 3 and ZONE_A_TEMP_SAMPLES[0] == ZONE_A_MAX_TEMP:
+			ZONE_A_TEMP_SAMPLES.pop(0)
+	else:
+		while len(ZONE_A_TEMP_SAMPLES) > AVERAGE_WINDOW: ZONE_A_TEMP_SAMPLES.pop(0)
 	AVG_ZONE_A_TEMP = statistics.mean(ZONE_A_TEMP_SAMPLES)
 	MAX_ZONE_A_TEMP = max(ZONE_A_TEMP_SAMPLES)
 	FINAL_ZONE_A_TEMP = (MAX_ZONE_A_TEMP + AVG_ZONE_A_TEMP) / 2
 	ZONE_B_TEMP_SAMPLES.append(PEAK_ZONE_B_TEMP)
-	while len(ZONE_B_TEMP_SAMPLES) > AVERAGE_WINDOW: ZONE_B_TEMP_SAMPLES.pop(0)
+	if len(ZONE_B_TEMP_SAMPLES) < AVERAGE_WINDOW:
+		# if we have enough real samples, drop the default samples to stabilize fan speeds sooner
+		if len(ZONE_B_TEMP_SAMPLES) == 3 and ZONE_B_TEMP_SAMPLES[0] == ZONE_B_MAX_TEMP:
+			ZONE_B_TEMP_SAMPLES.pop(0)
+	else:
+		while len(ZONE_B_TEMP_SAMPLES) > AVERAGE_WINDOW: ZONE_B_TEMP_SAMPLES.pop(0)
 	AVG_ZONE_B_TEMP = statistics.mean(ZONE_B_TEMP_SAMPLES)
 	MAX_ZONE_B_TEMP = max(ZONE_B_TEMP_SAMPLES)
 	FINAL_ZONE_B_TEMP = (MAX_ZONE_B_TEMP + AVG_ZONE_B_TEMP) / 2
