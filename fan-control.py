@@ -67,6 +67,12 @@ def reload_config():
 	global EXIT_ON_FAILURE;           EXIT_ON_FAILURE           = config.get('General Configuration', 'Exit On IPMI Failure').lower() in ["yes", "true", "1"]
 	DEBUG = config.get('General Configuration', 'Debug Mode').lower() in ["yes", "true", "1"]
 
+	# validate logic for safety
+	if not CONFIG_TEST:
+		if POLL_RATE < 1: POLL_RATE = 1
+		if IGNORE_TEMP_CHANGE_AMOUNT < 0: IGNORE_TEMP_CHANGE_AMOUNT = 0
+		if AVERAGE_WINDOW < 1: AVERAGE_WINDOW = 5
+
 	global IPMITOOL;
 	ipmitool_bin = None
 	ipmitool_desc = None
@@ -233,7 +239,10 @@ def config_test():
 		reload_config()
 		EXIT_ON_FAILURE = True
 		# Perform basic logical validation
+		if POLL_RATE < 1: raise ValueError("Poll Rate (%d) is invalid; must be at least 1" % POLL_RATE)
+		if IGNORE_TEMP_CHANGE_AMOUNT < 0: raise ValueError("Ignore Temp Change Amount (%d) is invalid; must be non-negative" % IGNORE_TEMP_CHANGE_AMOUNT)
 		if AVERAGE_WINDOW < 1: raise ValueError("Temp Averaging Window (%d) is invalid; must be at least 1." % AVERAGE_WINDOW)
+
 		if ZONE_A_MIN_TEMP >= ZONE_A_MAX_TEMP:
 			raise ValueError("Zone A: 'Minimum Temperature Degrees' (%d) must be less than 'Maximum Temperature Degrees' (%d)"
 					% (ZONE_A_MIN_TEMP, ZONE_A_MAX_TEMP))
