@@ -31,6 +31,7 @@ ZONE_B_MAX_TEMP = 60
 ZONE_B_MAX_FAN_PWM = 100
 POLL_RATE = 5
 IGNORE_TEMP_CHANGE_AMOUNT = 1
+AVERAGE_WINDOW = 5
 EXIT_ON_FAILURE = False
 DEBUG = False
 IPMITOOL = False
@@ -62,6 +63,7 @@ def reload_config():
 
 	global POLL_RATE;                 POLL_RATE                 = int(config.get('General Configuration', 'Poll Rate'))
 	global IGNORE_TEMP_CHANGE_AMOUNT; IGNORE_TEMP_CHANGE_AMOUNT = int(config.get('General Configuration', 'Ignore Temp Change Amount'))
+	global AVERAGE_WINDOW;            AVERAGE_WINDOW            = int(config.get('General Configuration', 'Temp Averaging Window', fallback="5"))
 	global EXIT_ON_FAILURE;           EXIT_ON_FAILURE           = config.get('General Configuration', 'Exit On IPMI Failure').lower() in ["yes", "true", "1"]
 	DEBUG = config.get('General Configuration', 'Debug Mode').lower() in ["yes", "true", "1"]
 
@@ -231,6 +233,7 @@ def config_test():
 		reload_config()
 		EXIT_ON_FAILURE = True
 		# Perform basic logical validation
+		if AVERAGE_WINDOW < 1: raise ValueError("Temp Averaging Window (%d) is invalid; must be at least 1." % AVERAGE_WINDOW)
 		if ZONE_A_MIN_TEMP >= ZONE_A_MAX_TEMP:
 			raise ValueError("Zone A: 'Minimum Temperature Degrees' (%d) must be less than 'Maximum Temperature Degrees' (%d)"
 					% (ZONE_A_MIN_TEMP, ZONE_A_MAX_TEMP))
@@ -303,9 +306,9 @@ if "--terse-output" in sys.argv:
 
 # Main program loop starts here
 reload_config(); check_if_already_running();
-ZONE_A_TEMP_SAMPLES = [ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP, ZONE_A_MAX_TEMP]
+ZONE_A_TEMP_SAMPLES = [ZONE_A_MAX_TEMP]
 ZONE_A_LAST_PWM = 0
-ZONE_B_TEMP_SAMPLES = [ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP, ZONE_B_MAX_TEMP]
+ZONE_B_TEMP_SAMPLES = [ZONE_B_MAX_TEMP]
 ZONE_B_LAST_PWM = 0
 USE_ALT_COMMANDS=True
 LAST_OUTPUT_LINE=""
@@ -355,12 +358,14 @@ while True:
 			if DEBUG: sys.stdout.write("ZONE B SENSOR MATCH: " + line[1] + " "+ str(temp) + "'C\n"); sys.stdout.flush()
 			if temp > PEAK_ZONE_B_TEMP: PEAK_ZONE_B_TEMP = temp
 
-	# Average out temp values over the last 5 samples to smooth RPM changes and output our values
-	ZONE_A_TEMP_SAMPLES.append(PEAK_ZONE_A_TEMP); ZONE_A_TEMP_SAMPLES.pop(0)
+	# Average out temp values over the last AVERAGE_WINDOW samples to smooth RPM changes and output our values
+	ZONE_A_TEMP_SAMPLES.append(PEAK_ZONE_A_TEMP)
+	while len(ZONE_A_TEMP_SAMPLES) > AVERAGE_WINDOW: ZONE_A_TEMP_SAMPLES.pop(0)
 	AVG_ZONE_A_TEMP = statistics.mean(ZONE_A_TEMP_SAMPLES)
 	MAX_ZONE_A_TEMP = max(ZONE_A_TEMP_SAMPLES)
 	FINAL_ZONE_A_TEMP = (MAX_ZONE_A_TEMP + AVG_ZONE_A_TEMP) / 2
-	ZONE_B_TEMP_SAMPLES.append(PEAK_ZONE_B_TEMP); ZONE_B_TEMP_SAMPLES.pop(0)
+	ZONE_B_TEMP_SAMPLES.append(PEAK_ZONE_B_TEMP)
+	while len(ZONE_B_TEMP_SAMPLES) > AVERAGE_WINDOW: ZONE_B_TEMP_SAMPLES.pop(0)
 	AVG_ZONE_B_TEMP = statistics.mean(ZONE_B_TEMP_SAMPLES)
 	MAX_ZONE_B_TEMP = max(ZONE_B_TEMP_SAMPLES)
 	FINAL_ZONE_B_TEMP = (MAX_ZONE_B_TEMP + AVG_ZONE_B_TEMP) / 2
@@ -382,8 +387,8 @@ while True:
 	# Calculate our fan PWM values
 	if FAILED_FAN:
 		sys.stdout.write('Failed fan detected. Setting both zones to 100% PWM!\n'); sys.stdout.flush()
-		ZONE_A_TEMP_SAMPLES = [100, 100, 100, 100, 100]
-		ZONE_B_TEMP_SAMPLES = [100, 100, 100, 100, 100]
+		ZONE_A_TEMP_SAMPLES = [ZONE_A_MAX_TEMP]
+		ZONE_B_TEMP_SAMPLES = [ZONE_B_MAX_TEMP]
 		ZONE_A_FINAL_PWM = 100
 		ZONE_B_FINAL_PWM = 100
 	else:
