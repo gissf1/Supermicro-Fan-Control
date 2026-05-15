@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 '''
 
@@ -46,7 +46,10 @@ def reload_config():
 	global CONFIG_TEST
 	global PREV_CONFIG_MTIME
 
-	config_path = os.path.join(os.path.dirname(__file__), './config.ini')
+	# Prioritize system-wide config over local config
+	config_path = '/etc/fan-control.ini'
+	if not os.path.exists(config_path):
+		config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.ini')
 
 	# Check if config.ini has been updated
 	if os.path.exists(config_path) == False:
