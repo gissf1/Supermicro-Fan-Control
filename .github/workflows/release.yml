@@ -1,0 +1,186 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - 'release-test'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Gather Data into Environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RFC_DATE=$(date --rfc-email --utc)
+          DATE=$(date -u +%Y%m%d)
+          TIME=$(date -u +%H%M%S)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
+          # Calculate Release Flags
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            DRAFT=true
+            PRERELEASE=true
+          else
+            # Check for letter suffix (e.g. v1.0.0-a1, v1.0.0_b, v1.0.0p)
+            if [[ "${{ github.ref_name }}" =~ [0-9][_-]?[a-zA-Z]+[0-9]*$ ]]; then
+              PRERELEASE=true
+            else
+              PRERELEASE=false
+            fi
+            # Set to false here when you are ready to allow tags to bypass draft mode
+            DRAFT=true
+          fi
+
+          # Get the first tag preceding HEAD^. Using HEAD^ ensures that if the current commit IS a tag, we find the one before it.
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # If no tags exist...
+          if [ -n "$PREV_TAG" ]; then
+            # If tag exists, get its hash
+            PREV_TAG_HASH=$(git rev-parse "$PREV_TAG")
+          else
+            # fall back to the fork commit
+            if [ "${{ github.event.repository.fork }}" = "true" ]; then
+              UPSTREAM=$(gh api repos/${{ github.repository }} --jq '.parent.full_name')
+              UPSTREAM_BR=$(gh api repos/$UPSTREAM --jq '.default_branch')
+              git remote add upstream "https://github.com/$UPSTREAM.git"
+              git fetch upstream "$UPSTREAM_BR" --quiet --depth=1 || true
+              PREV_TAG_HASH=$(git merge-base HEAD "upstream/$UPSTREAM_BR" 2>/dev/null || echo "")
+            fi
+
+            # if not forked, use the first commit
+            if [ -z "$PREV_TAG_HASH" ]; then
+              PREV_TAG_HASH=$(git rev-list --max-parents=0 HEAD)
+            fi
+          fi
+
+          echo "PREV_TAG: $PREV_TAG"
+          echo "PREV_TAG_HASH: $PREV_TAG_HASH"
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION=$( sed -r "s/^release-test\$//g" <<< "$VERSION" )
+          if [ -z "$VERSION" ]; then
+            if [[ "$PREV_TAG" =~ ^v([0-9]+\.[0-9]+)\. ]]; then
+              VERSION="${VERSION:-${BASH_REMATCH[1]}.${DATE}-1~${SHORT_SHA}}"
+            else
+              VERSION="${VERSION:-0.0.${DATE}-1~${SHORT_SHA}}"
+            fi
+          fi
+          echo "VERSION: $VERSION"
+
+          # store values in Environment
+          echo "DRAFT=$DRAFT" >> "$GITHUB_ENV"
+          echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
+          echo "RFC_DATE=$RFC_DATE" >> "$GITHUB_ENV"
+          echo "DATE=$DATE" >> "$GITHUB_ENV"
+          echo "TIME=$TIME" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "PREV_TAG=$PREV_TAG" >> "$GITHUB_ENV"
+          echo "PREV_TAG_HASH=$PREV_TAG_HASH" >> "$GITHUB_ENV"
+
+      - name: Build Debian Package
+        run: |
+          mkdir -p build/deb/usr/bin build/deb/etc build/deb/lib/systemd/system build/deb/DEBIAN
+          cp fan-control.py build/deb/usr/bin/fan-control
+          chmod +x build/deb/usr/bin/fan-control
+          cp config.ini build/deb/etc/fan-control.ini
+          cp fan-control.service build/deb/lib/systemd/system/
+          echo "/etc/fan-control.ini" > build/deb/DEBIAN/conffiles
+
+          cat <<EOF > build/deb/DEBIAN/control
+          Package: supermicro-fan-control
+          Version: ${{ env.VERSION }}
+          Date: ${{ env.RFC_DATE }}
+          Section: utils
+          Priority: optional
+          Architecture: all
+          Depends: python3, ipmitool
+          Maintainer: "Brian G" <gissf1@gmail.com>
+          Homepage: https://github.com/gissf1/supermicro-fan-control
+          Description: Intelligent fan control script for SuperMicro motherboards (GPLv3)
+          EOF
+          dpkg-deb --build build/deb supermicro-fan-control.deb
+
+      - name: Generate Checksums
+        run: |
+          # Calculate Hash
+          DEB_HASH=$(sha256sum supermicro-fan-control.deb | cut -d' ' -f1)
+          echo "$DEB_HASH" > supermicro-fan-control.deb.sha256
+
+          # store hash in Environment
+          echo "DEB_HASH=$DEB_HASH" >> "$GITHUB_ENV"
+
+          # Update PKGBUILD with the actual hash of the .deb package being released
+          sed -i "
+            s/^sha256sums=('SKIP')/sha256sums=('$DEB_HASH')/;
+            s/^\(pkgver\)=PACKAGE_VERSION/\1=$VERSION/;
+            " PKGBUILD
+
+      - name: Generate Changelog
+        run: |
+          # Generate Commit History for Release Body
+
+          DIRNAME=$( dirname "${{ github.workspace }}" )
+          CHANGELOG="$DIRNAME/Release-CHANGELOG.txt"
+
+          cat <<EOF > "$CHANGELOG"
+          # Release v${{ env.VERSION }}
+
+          ## Notes:
+          - Release Date: ${{ env.RFC_DATE }}
+          - Based on Commit: ${{ github.sha }}
+          - Previous Release: ${{ env.PREV_TAG || 'None' }} (${{ env.PREV_TAG_HASH }})
+          - deb Package SHA256: ${{ env.DEB_HASH }}
+
+          ## Changes in this release
+          EOF
+
+          if [ -z "${{ env.PREV_TAG_HASH }}" ]; then
+            git log --pretty=format:"- %s (%h)" --reverse >> "$CHANGELOG"
+          else
+            git log --pretty=format:"- %s (%h)" ${{ env.PREV_TAG_HASH }}..HEAD --reverse >> "$CHANGELOG"
+          fi
+
+          # store path in Environment
+          echo "CHANGELOG=$CHANGELOG" >> "$GITHUB_ENV"
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: "${{ github.ref_type == 'tag' && github.ref_name || format('test-{0}-{1}', env.DATE, env.SHORT_SHA) }}"
+          name: "${{ github.ref_type == 'tag' && github.ref_name || format('Test Build: {0}', github.ref_name) }}"
+          body_path: "${{ env.CHANGELOG }}"
+          target_commitish: "${{ github.sha }}"
+          draft: ${{ env.DRAFT == 'true' }}
+          prerelease: ${{ env.PRERELEASE == 'true' }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+          files: |
+            supermicro-fan-control.deb
+            supermicro-fan-control.deb.sha256
+            fan-control.py
+            config.ini
+            PKGBUILD
+            supermicro-fan-control.ebuild
+            ${{ env.CHANGELOG }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify AUR/Gentoo
+        run: |
+          echo "Manual step: Update AUR PKGBUILD and Gentoo Overlay with new version and checksums."
