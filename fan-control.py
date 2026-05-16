@@ -16,26 +16,38 @@ import os, sys, re, time, signal
 from subprocess import Popen, PIPE
 import shutil
 
-# Set up our default variables with safe values
-ZONE_A_SENSOR_NAME_SEARCH = r'^.*CPU.*$'
-ZONE_A_SENSOR_TEST_MATCH = False
-ZONE_A_MIN_TEMP = 50
-ZONE_A_MIN_FAN_PWM = 80
-ZONE_A_MAX_TEMP = 60
-ZONE_A_MAX_FAN_PWM = 100
-ZONE_B_SENSOR_NAME_SEARCH = r'^.*CPU.*$'
-ZONE_B_SENSOR_TEST_MATCH = True
-ZONE_B_MIN_TEMP = 50
-ZONE_B_MIN_FAN_PWM = 80
-ZONE_B_MAX_TEMP = 60
-ZONE_B_MAX_FAN_PWM = 100
-POLL_RATE = 5
-IGNORE_TEMP_CHANGE_AMOUNT = 1
-AVERAGE_WINDOW = 5
-RESTORE_FANS_ON_EXIT = True
-EXIT_ON_FAILURE = False
-DEBUG = False
-IPMITOOL = False
+# Declarative configuration mapping: (INI Section, list of (INI Option, Global Variable Name, Default Value, [Type]))
+# If Type is omitted, it's inferred from the default value.
+# If Default is omitted, it's inferred from the current global variable state.
+CONFIG_MAP = [
+	('Fan Zone A', [
+		('Sensor Name Search',          'ZONE_A_SENSOR_NAME_SEARCH', r'^.*CPU.*$'),
+		('Sensor Test Match',           'ZONE_A_SENSOR_TEST_MATCH',  False, bool),
+		('Minimum Temperature Degrees', 'ZONE_A_MIN_TEMP',           50),
+		('Minimum Temperature Fan PWM', 'ZONE_A_MIN_FAN_PWM',        80),
+		('Maximum Temperature Degrees', 'ZONE_A_MAX_TEMP',           60),
+		('Maximum Temperature Fan PWM', 'ZONE_A_MAX_FAN_PWM',        100),
+	]),
+	('Fan Zone B', [
+		('Sensor Name Search',          'ZONE_B_SENSOR_NAME_SEARCH', r'^.*CPU.*$'),
+		('Sensor Test Match',           'ZONE_B_SENSOR_TEST_MATCH',  True, bool),
+		('Minimum Temperature Degrees', 'ZONE_B_MIN_TEMP',           50),
+		('Minimum Temperature Fan PWM', 'ZONE_B_MIN_FAN_PWM',        80),
+		('Maximum Temperature Degrees', 'ZONE_B_MAX_TEMP',           60),
+		('Maximum Temperature Fan PWM', 'ZONE_B_MAX_FAN_PWM',        100),
+	]),
+	('General Configuration', [
+		('Poll Rate',                 'POLL_RATE',                 5),
+		('Ignore Temp Change Amount', 'IGNORE_TEMP_CHANGE_AMOUNT', 1),
+		('Temp Averaging Window',     'AVERAGE_WINDOW',            5),
+		('Restore Fans On Exit',      'RESTORE_FANS_ON_EXIT',      True,  bool),
+		('Exit On IPMI Failure',      'EXIT_ON_FAILURE',           False, bool),
+		('Debug Mode',                'DEBUG',                     False, bool),
+		('IPMITOOL',                  'IPMITOOL',                  False, str), # Default None, type str
+	]),
+]
+
+# For command line arguments and internal state
 CONFIG_TEST = False
 PREV_CONFIG_MTIME = None
 TERSE_OUTPUT = False
@@ -67,13 +79,85 @@ def which_compat(cmd):
 			return full
 	return None
 
+class ConfigWrapper:
+	"""Helper to wrap configparser and provide defaults/type coercion."""
+	def __init__(self, cfg, config_map):
+		self.config = cfg
+		self.config_map = config_map
+		self.section = None
+
+	def useSection(self, section):
+		"""Set the active section for subsequent get calls."""
+		self.section = section
+
+	def get(self, option, default=None):
+		try:
+			val = self.config.get(self.section, option)
+		except (configparser.NoSectionError, configparser.NoOptionError):
+			if CONFIG_TEST: raise
+			val = default
+		return val
+
+	def getint(self, option, default=None):
+		try:
+			return int(self.config.get(self.section, option))
+		except (configparser.NoSectionError, configparser.NoOptionError, ValueError):
+			if CONFIG_TEST: raise
+			return default
+
+	def getbool(self, option, default=None):
+		try:
+			val_str = self.config.get(self.section, option)
+			if val_str is None:
+				return default
+
+			val_str_lower = str(val_str).lower()
+			if val_str_lower in ["yes", "true", "1"]:
+				return True
+			elif val_str_lower in ["no", "false", "0"]:
+				return False
+			else:
+				raise ValueError("Invalid boolean value: '%s'" % val_str)
+		except (configparser.NoSectionError, configparser.NoOptionError, ValueError):
+			if CONFIG_TEST: raise
+			return default
+
+	def has_option(self, option):
+		return self.config.has_option(self.section, option)
+
+	def load(self):
+		# Declaratively load all mapped configuration values
+		for section, section_options in self.config_map:
+			self.useSection(section)
+			for item in section_options:
+				option, g_name = item[0], item[1]
+				default = item[2] if len(item) >= 3 else globals().get(g_name)
+				v_type = item[3] if len(item) == 4 else type(default)
+
+				if v_type is bool: globals()[g_name] = self.getbool(option, default)
+				elif v_type is int: globals()[g_name] = self.getint(option, default)
+				else: globals()[g_name] = self.get(option, default)
+
+def load_defaults(config_map):
+	# Load the default configuration values
+	for _, section_options in config_map:
+		for item in section_options:
+			# _, g_name, default, _
+			globals()[item[1]] = item[2]
+
+def get_default(target):
+	for section, section_options in CONFIG_MAP:
+		for (_, g_name, default, _) in section_options:
+			if g_name == target:
+				return default
+	return None
+
 def reload_config():
 	# type: () -> None
 	"""Reload the configuration file and update global settings."""
-	global DEBUG
-	global IPMITOOL
-	global CONFIG_TEST
-	global PREV_CONFIG_MTIME
+
+	# Only declare globals that are modified outside of config.load()
+	global IPMITOOL, PREV_CONFIG_MTIME, POLL_RATE, IGNORE_TEMP_CHANGE_AMOUNT, AVERAGE_WINDOW
 
 	# Prioritize system-wide config over local config
 	config_path = '/etc/fan-control.ini'
@@ -100,27 +184,8 @@ def reload_config():
 
 	config = configparser.ConfigParser()
 	config.read(config_path)
-
-	global ZONE_A_SENSOR_NAME_SEARCH; ZONE_A_SENSOR_NAME_SEARCH = config.get('Fan Zone A', 'Sensor Name Search')
-	global ZONE_A_SENSOR_TEST_MATCH;  ZONE_A_SENSOR_TEST_MATCH  = config.get('Fan Zone A', 'Sensor Test Match').lower() in ["yes", "true", "1"]
-	global ZONE_A_MIN_TEMP;           ZONE_A_MIN_TEMP           = int(config.get('Fan Zone A', 'Minimum Temperature Degrees'))
-	global ZONE_A_MIN_FAN_PWM;        ZONE_A_MIN_FAN_PWM        = int(config.get('Fan Zone A', 'Minimum Temperature Fan PWM'))
-	global ZONE_A_MAX_TEMP;           ZONE_A_MAX_TEMP           = int(config.get('Fan Zone A', 'Maximum Temperature Degrees'))
-	global ZONE_A_MAX_FAN_PWM;        ZONE_A_MAX_FAN_PWM        = int(config.get('Fan Zone A', 'Maximum Temperature Fan PWM'))
-
-	global ZONE_B_SENSOR_NAME_SEARCH; ZONE_B_SENSOR_NAME_SEARCH = config.get('Fan Zone B', 'Sensor Name Search')
-	global ZONE_B_SENSOR_TEST_MATCH;  ZONE_B_SENSOR_TEST_MATCH  = config.get('Fan Zone B', 'Sensor Test Match').lower() in ["yes", "true", "1"]
-	global ZONE_B_MIN_TEMP;           ZONE_B_MIN_TEMP           = int(config.get('Fan Zone B', 'Minimum Temperature Degrees'))
-	global ZONE_B_MIN_FAN_PWM;        ZONE_B_MIN_FAN_PWM        = int(config.get('Fan Zone B', 'Minimum Temperature Fan PWM'))
-	global ZONE_B_MAX_TEMP;           ZONE_B_MAX_TEMP           = int(config.get('Fan Zone B', 'Maximum Temperature Degrees'))
-	global ZONE_B_MAX_FAN_PWM;        ZONE_B_MAX_FAN_PWM        = int(config.get('Fan Zone B', 'Maximum Temperature Fan PWM'))
-
-	global POLL_RATE;                 POLL_RATE                 = int(config.get('General Configuration', 'Poll Rate'))
-	global IGNORE_TEMP_CHANGE_AMOUNT; IGNORE_TEMP_CHANGE_AMOUNT = int(config.get('General Configuration', 'Ignore Temp Change Amount'))
-	global AVERAGE_WINDOW;            AVERAGE_WINDOW            = int(config.get('General Configuration', 'Temp Averaging Window', fallback="5"))
-	global RESTORE_FANS_ON_EXIT;      RESTORE_FANS_ON_EXIT      = config.get('General Configuration', 'Restore Fans On Exit', fallback="True").lower() in ["yes", "true", "1"]
-	global EXIT_ON_FAILURE;           EXIT_ON_FAILURE           = config.get('General Configuration', 'Exit On IPMI Failure').lower() in ["yes", "true", "1"]
-	DEBUG = config.get('General Configuration', 'Debug Mode').lower() in ["yes", "true", "1"]
+	config = ConfigWrapper(config, CONFIG_MAP)
+	config.load()
 
 	# validate logic for safety
 	if not CONFIG_TEST:
@@ -130,8 +195,9 @@ def reload_config():
 
 	ipmitool_bin = None
 	ipmitool_desc = None
-	try:
-		IPMITOOL = config.get('General Configuration', 'IPMITOOL')
+
+	# Process IPMITOOL overrides
+	if IPMITOOL:
 		if str(IPMITOOL).lower() in [ "", "0", "false", "none" ]:
 			IPMITOOL = False
 		else:
@@ -144,9 +210,7 @@ def reload_config():
 				if DEBUG:
 					sys.stdout.write("\n\nError: " + err + "\n")
 				IPMITOOL = False
-	except configparser.NoOptionError as e:
-		if DEBUG: sys.stdout.write("\n" + str(e) + "\n")
-		IPMITOOL = False
+
 	# if false, use the builtin IPMICFG tool
 	if IPMITOOL == False:
 		ipmitool_bin = get_bundled_ipmicfg_binary()
@@ -426,6 +490,8 @@ def handle_signal(signum, frame):
 	# type: (int, object) -> None
 	"""Signal handler to ensure graceful termination."""
 	sys_exit(0)
+
+load_defaults(CONFIG_MAP)
 
 # Validate configuration if requested
 if "--configtest" in sys.argv:
