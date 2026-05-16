@@ -40,8 +40,9 @@ CONFIG_TEST = False
 PREV_CONFIG_MTIME = None
 TERSE_OUTPUT = False
 
-# Wrapper for (re)reading config.ini
 def reload_config():
+	# type: () -> None
+	"""Reload the configuration file and update global settings."""
 	global DEBUG
 	global IPMITOOL
 	global CONFIG_TEST
@@ -151,10 +152,13 @@ def reload_config():
 	if DEBUG: sys.stdout.write("done\n")
 
 def get_bundled_ipmicfg_binary():
+	# type: () -> str
+	"""Return the path to the bundled IPMICFG binary."""
 	return os.path.join(os.path.dirname(__file__), "./ipmitool/", "IPMICFG-Linux.x86")
 
-# Wrapper for making IPMI calls
 def call_ipmi(params):
+	# type: (list) -> list
+	"""Execute an IPMI command and return the exit code and output."""
 	global IPMITOOL
 	if IPMITOOL:
 		# External ipmitool prefers commands without the leading dash
@@ -181,8 +185,9 @@ def call_ipmi(params):
 	if DEBUG: sys.stdout.write("IPMI exit code: %d\n" % EXITCODE)
 	return [EXITCODE, output.decode('utf-8'), err]
 
-# Wrapper for making sure we're not already running
 def check_if_already_running():
+	# type: () -> None
+	"""Exit if another instance of this script is already running."""
 	if DEBUG: sys.stdout.write("Checking if already running other than my PID %d... " % os.getpid()); sys.stdout.flush()
 	CMD = ["pgrep", "-f", __file__]
 	if DEBUG: sys.stdout.write('Calling ' + ' '.join(CMD) + '\n'); sys.stdout.flush()
@@ -201,8 +206,9 @@ def check_if_already_running():
 			if DEBUG: sys.stdout.write("stopping here as there is another instance running.\n"); sys.stdout.flush()
 			sys.exit(0)
 
-# Wrapper for calculating fan PWM - this is quite complex
 def calculate_pwm(PEAK_TEMP, MIN_TEMP, MAX_TEMP, MIN_FAN_PWM, MAX_FAN_PWM):
+	# type: (float, int, int, int, int) -> int
+	"""Calculate PWM percentage based on temperature thresholds."""
 	PWMVAL = float(PEAK_TEMP)
 	if   PWMVAL < MIN_TEMP: PWMVAL = MIN_TEMP # Sanitise input
 	elif PWMVAL > MAX_TEMP: PWMVAL = MAX_TEMP # Sanitise input
@@ -213,6 +219,7 @@ def calculate_pwm(PEAK_TEMP, MIN_TEMP, MAX_TEMP, MIN_FAN_PWM, MAX_FAN_PWM):
 	return int(PWMVAL)
 
 def parse_sdr_fields(line):
+	# type: (object) -> list
 	"""parse SDR fields from an IPMI response.
 	- If necessary, parses string line parameter into a list
 	- External IPMITOOL has a different 'sdr' output format than IPMICFG, so if necessary, swap SDR line field order
@@ -233,6 +240,7 @@ def parse_sdr_fields(line):
 	return l
 
 def get_celsius_from_field(line):
+	# type: (list) -> int
 	"""Extracts Celsius temperature from an SDR field list.
 	Returns integer Celsius value or None if not a valid temperature.
 	"""
@@ -255,6 +263,7 @@ def get_celsius_from_field(line):
 	return None
 
 def config_test():
+	# type: () -> int
 	"""Test configuration file for validity.
 	Return 0 if valid, 1 if invalid.
 	"""
@@ -334,7 +343,8 @@ def config_test():
 		return 1
 
 def set_fan_speed(zone, speed):
-	""" sets the fan speed and returns True on success; False on failure. """
+	# type: (int, float) -> bool
+	"""Set the fan speed for a specific zone and return success status."""
 	global USE_ALT_COMMANDS
 	global EXIT_ON_FAILURE
 
@@ -379,7 +389,7 @@ def set_fan_speed(zone, speed):
 
 def sys_exit(exitcode):
 	# type: (int) -> None
-	"""Reset fans to 100% and exit gracefully."""
+	"""Reset fans to 100% (if configured) and terminate the script."""
 	if RESTORE_FANS_ON_EXIT:
 		sys.stdout.write('\nReceived exit signal. Resetting fans to 100% for safety...\n')
 		set_fan_speed(0, 100)
@@ -388,7 +398,7 @@ def sys_exit(exitcode):
 
 def handle_signal(signum, frame):
 	# type: (int, object) -> None
-	"""Exit gracefully."""
+	"""Signal handler to ensure graceful termination."""
 	sys_exit(0)
 
 # Validate configuration if requested
