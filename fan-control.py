@@ -101,18 +101,17 @@ def reload_config():
 		if IGNORE_TEMP_CHANGE_AMOUNT < 0: IGNORE_TEMP_CHANGE_AMOUNT = 0
 		if AVERAGE_WINDOW < 1: AVERAGE_WINDOW = 5
 
-	global IPMITOOL;
 	ipmitool_bin = None
 	ipmitool_desc = None
 	try:
 		IPMITOOL = config.get('General Configuration', 'IPMITOOL')
-		if IPMITOOL.lower() in [ "", "0", "false", "none" ]:
+		if str(IPMITOOL).lower() in [ "", "0", "false", "none" ]:
 			IPMITOOL = False
 		else:
 			# validate the external command exists, or replace with False
 			ipmitool_bin = shutil.which(IPMITOOL)
 			if ipmitool_bin is None:
-				err = "Unable to find ipmitool in system path: " + IPMITOOL
+				err = "Unable to find ipmitool in system path: " + str(IPMITOOL)
 				if CONFIG_TEST:
 					raise FileNotFoundError(err)
 				if DEBUG:
