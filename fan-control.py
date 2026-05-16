@@ -412,9 +412,9 @@ USE_ALT_COMMANDS=True
 LAST_OUTPUT_LINE=""
 while True:
 	# Reset variables
-	PEAK_ZONE_A_TEMP = 0
+	PEAK_ZONE_A_TEMP = -999
 	FINAL_ZONE_A_TEMP = 0
-	PEAK_ZONE_B_TEMP = 0
+	PEAK_ZONE_B_TEMP = -999
 	FINAL_ZONE_B_TEMP = 0
 	ZONE_A_FINAL_PWM = 0
 	ZONE_B_FINAL_PWM = 0
@@ -455,6 +455,14 @@ while True:
 		if (ZONE_B_SENSOR_NAME_SEARCH.lower() in line[1].lower()) == ZONE_B_SENSOR_TEST_MATCH:
 			if DEBUG: sys.stdout.write("ZONE B SENSOR MATCH: " + line[1] + " "+ str(temp) + "'C\n"); sys.stdout.flush()
 			if temp > PEAK_ZONE_B_TEMP: PEAK_ZONE_B_TEMP = temp
+
+	# Handle the case where our search string didn't match any sensors
+	if PEAK_ZONE_A_TEMP == -999:
+		sys.stdout.write("No valid temperature sensors found for Zone A matching '%s'\n" % ZONE_A_SENSOR_NAME_SEARCH)
+		PEAK_ZONE_A_TEMP = ZONE_A_MAX_TEMP
+	if PEAK_ZONE_B_TEMP == -999:
+		sys.stdout.write("No valid temperature sensors found for Zone B matching '%s'\n" % ZONE_B_SENSOR_NAME_SEARCH)
+		PEAK_ZONE_B_TEMP = ZONE_B_MAX_TEMP
 
 	# Average out temp values over the last AVERAGE_WINDOW samples to smooth RPM changes and output our values
 	ZONE_A_TEMP_SAMPLES.append(PEAK_ZONE_A_TEMP)
