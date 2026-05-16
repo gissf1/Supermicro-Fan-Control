@@ -12,7 +12,7 @@ Written by JBG 20190715
 '''
 
 # Import required modules
-import os, sys, re, time, configparser, statistics
+import os, sys, re, time, configparser, statistics, signal
 from subprocess import Popen, PIPE
 import shutil
 
@@ -32,6 +32,7 @@ ZONE_B_MAX_FAN_PWM = 100
 POLL_RATE = 5
 IGNORE_TEMP_CHANGE_AMOUNT = 1
 AVERAGE_WINDOW = 5
+RESTORE_FANS_ON_EXIT = True
 EXIT_ON_FAILURE = False
 DEBUG = False
 IPMITOOL = False
@@ -89,6 +90,7 @@ def reload_config():
 	global POLL_RATE;                 POLL_RATE                 = int(config.get('General Configuration', 'Poll Rate'))
 	global IGNORE_TEMP_CHANGE_AMOUNT; IGNORE_TEMP_CHANGE_AMOUNT = int(config.get('General Configuration', 'Ignore Temp Change Amount'))
 	global AVERAGE_WINDOW;            AVERAGE_WINDOW            = int(config.get('General Configuration', 'Temp Averaging Window', fallback="5"))
+	global RESTORE_FANS_ON_EXIT;      RESTORE_FANS_ON_EXIT      = config.get('General Configuration', 'Restore Fans On Exit', fallback="True").lower() in ["yes", "true", "1"]
 	global EXIT_ON_FAILURE;           EXIT_ON_FAILURE           = config.get('General Configuration', 'Exit On IPMI Failure').lower() in ["yes", "true", "1"]
 	DEBUG = config.get('General Configuration', 'Debug Mode').lower() in ["yes", "true", "1"]
 
@@ -197,7 +199,7 @@ def check_if_already_running():
 			if DEBUG: sys.stdout.write("this is me, ignoring.\n"); sys.stdout.flush()
 		else:
 			if DEBUG: sys.stdout.write("stopping here as there is another instance running.\n"); sys.stdout.flush()
-			exit(0)
+			sys.exit(0)
 
 # Wrapper for calculating fan PWM - this is quite complex
 def calculate_pwm(PEAK_TEMP, MIN_TEMP, MAX_TEMP, MIN_FAN_PWM, MAX_FAN_PWM):
@@ -351,7 +353,7 @@ def set_fan_speed(zone, speed):
 			sys.stdout.write("error setting fan PWM, attempting alternative command... ")
 			sys.stdout.flush()
 			USE_ALT_COMMANDS = True
-			if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
+			if EXIT_ON_FAILURE: sys_exit(updatepwm[0])
 
 	if USE_ALT_COMMANDS:
 		zoneByte = hex(0x10 + zone);
@@ -361,7 +363,7 @@ def set_fan_speed(zone, speed):
 	if updatepwm[0] != 0:
 		sys.stdout.write("error setting fan PWM by alternative command too!\n")
 		sys.stdout.flush()
-		if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
+		if EXIT_ON_FAILURE: sys_exit(updatepwm[0])
 
 	# returns False on failure
 	returnValue = True
@@ -375,6 +377,20 @@ def set_fan_speed(zone, speed):
 		sys.stdout.flush()
 	return returnValue
 
+def sys_exit(exitcode):
+	# type: (int) -> None
+	"""Reset fans to 100% and exit gracefully."""
+	if RESTORE_FANS_ON_EXIT:
+		sys.stdout.write('\nReceived exit signal. Resetting fans to 100% for safety...\n')
+		set_fan_speed(0, 100)
+		set_fan_speed(1, 100)
+	sys.exit(exitcode)
+
+def handle_signal(signum, frame):
+	# type: (int, object) -> None
+	"""Exit gracefully."""
+	sys_exit(0)
+
 # Validate configuration if requested
 if "--configtest" in sys.argv:
 	sys.exit(config_test())
@@ -382,6 +398,9 @@ if "--configtest" in sys.argv:
 # determine if we should use terse log output mode
 if "--terse-output" in sys.argv:
 	TERSE_OUTPUT = True
+
+signal.signal(signal.SIGTERM, handle_signal)
+signal.signal(signal.SIGINT, handle_signal)
 
 # Main program loop starts here
 reload_config(); check_if_already_running();
@@ -410,7 +429,7 @@ while True:
 	sensorinfo = call_ipmi(["-sdr"])
 	if sensorinfo[0] != 0:
 		sys.stdout.write("Error getting info from IPMI: " + sensorinfo[1] + "\n"); sys.stdout.flush()
-		if EXIT_ON_FAILURE: sys.exit(sensorinfo[0])
+		if EXIT_ON_FAILURE: sys_exit(sensorinfo[0])
 		time.sleep(POLL_RATE)
 		continue
 
