@@ -331,6 +331,50 @@ def config_test():
 		sys.stderr.write("Configuration error: " + str(e) + "\n")
 		return 1
 
+def set_fan_speed(zone, speed):
+	""" sets the fan speed and returns True on success; False on failure. """
+	global USE_ALT_COMMANDS
+	global EXIT_ON_FAILURE
+
+	zoneName = "Zone A" if zone == 0 else "Zone B"
+
+	sys.stdout.write('Setting our ' + zoneName + ' fan PWM to ' + str(speed) + '%... ')
+	sys.stdout.flush()
+
+	updatepwm = []
+
+	if not USE_ALT_COMMANDS:
+		zoneByte = hex(0x0 + zone);
+		speedByte = hex(int((speed * 2.55) / 2))
+		updatepwm = call_ipmi("-raw 0x30 0x70 0x66 0x01".split() + [zoneByte, speedByte])
+		if updatepwm[0] != 0:
+			sys.stdout.write("error setting fan PWM, attempting alternative command... ")
+			sys.stdout.flush()
+			USE_ALT_COMMANDS = True
+			if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
+
+	if USE_ALT_COMMANDS:
+		zoneByte = hex(0x10 + zone);
+		speedByte = hex(int((speed * 2.55) / 1))
+		updatepwm = call_ipmi("-raw 0x30 0x91 0x5A 0x3".split() + [zoneByte, speedByte])
+
+	if updatepwm[0] != 0:
+		sys.stdout.write("error setting fan PWM by alternative command too!\n")
+		sys.stdout.flush()
+		if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
+
+	# returns False on failure
+	returnValue = True
+	if len(updatepwm) < 1:
+		returnValue = False
+	else:
+		returnValue = (updatepwm[0] == 0)
+
+	if returnValue:
+		sys.stdout.write("success!\n")
+		sys.stdout.flush()
+	return returnValue
+
 # Validate configuration if requested
 if "--configtest" in sys.argv:
 	sys.exit(config_test())
@@ -442,39 +486,13 @@ while True:
 
 	# Set fan speeds
 	if abs(ZONE_A_FINAL_PWM - ZONE_A_LAST_PWM) > IGNORE_TEMP_CHANGE_AMOUNT:
-		sys.stdout.write('Setting our Zone A fan PWM to ' + str(ZONE_A_FINAL_PWM) + '%... '); sys.stdout.flush()
-		if not USE_ALT_COMMANDS:
-			updatepwm = call_ipmi("-raw 0x30 0x70 0x66 0x01 0x00".split() + [hex(int((ZONE_A_FINAL_PWM * 2.55) / 2))])
-			if updatepwm[0] != 0:
-				sys.stdout.write("error setting fan PWM, attempting alternative command... "); sys.stdout.flush()
-				USE_ALT_COMMANDS = True
-				if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
-			else: sys.stdout.write("success!\n"); sys.stdout.flush()
-		if USE_ALT_COMMANDS:
-			updatepwm = call_ipmi("-raw 0x30 0x91 0x5A 0x3 0x10".split() + [hex(int((ZONE_A_FINAL_PWM * 2.55) / 1))])
-			if updatepwm[0] != 0:
-				sys.stdout.write("error setting fan PWM by alternative command too!\n"); sys.stdout.flush()
-				if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
-			else: sys.stdout.write("success!\n"); sys.stdout.flush()
+		set_fan_speed(0, ZONE_A_FINAL_PWM)
 		ZONE_A_LAST_PWM = ZONE_A_FINAL_PWM
 	elif not TERSE_OUTPUT:
 		sys.stdout.write('Not setting our Zone A fan PWM, little to no change since last time (' + str(ZONE_A_FINAL_PWM) + '%).\n'); sys.stdout.flush()
 
 	if abs(ZONE_B_FINAL_PWM - ZONE_B_LAST_PWM) > IGNORE_TEMP_CHANGE_AMOUNT:
-		sys.stdout.write('Setting our Zone B fan PWM to ' + str(ZONE_B_FINAL_PWM) + '%... '); sys.stdout.flush()
-		if not USE_ALT_COMMANDS:
-			updatepwm = call_ipmi("-raw 0x30 0x70 0x66 0x01 0x01".split() + [hex(int((ZONE_B_FINAL_PWM * 2.55) / 2))])
-			if updatepwm[0] != 0:
-				sys.stdout.write("error setting fan PWM, attempting alternative command..."); sys.stdout.flush()
-				USE_ALT_COMMANDS = True
-				if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
-			else: sys.stdout.write("success!\n"); sys.stdout.flush()
-		if USE_ALT_COMMANDS:
-			updatepwm = call_ipmi("-raw 0x30 0x91 0x5A 0x3 0x11".split() + [hex(int((ZONE_B_FINAL_PWM * 2.55) / 1))])
-			if updatepwm[0] != 0:
-				sys.stdout.write("error setting fan PWM by alternative command too!\n"); sys.stdout.flush()
-				if EXIT_ON_FAILURE: sys.exit(updatepwm[0])
-			else: sys.stdout.write("success!\n"); sys.stdout.flush()
+		set_fan_speed(1, ZONE_B_FINAL_PWM)
 		ZONE_B_LAST_PWM = ZONE_B_FINAL_PWM
 	elif not TERSE_OUTPUT:
 		sys.stdout.write('Not setting our Zone B fan PWM, little to no change since last time (' + str(ZONE_B_FINAL_PWM) + '%).\n'); sys.stdout.flush()
