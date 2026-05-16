@@ -12,7 +12,7 @@ Written by JBG 20190715
 '''
 
 # Import required modules
-import os, sys, re, time, configparser, statistics, signal
+import os, sys, re, time, signal
 from subprocess import Popen, PIPE
 import shutil
 
@@ -39,6 +39,33 @@ IPMITOOL = False
 CONFIG_TEST = False
 PREV_CONFIG_MTIME = None
 TERSE_OUTPUT = False
+
+# Compatibility shims for Python 2.7
+try:
+	import configparser
+except ImportError:
+	import ConfigParser as configparser
+
+try:
+	import statistics
+except ImportError:
+	class statistics:
+		@staticmethod
+		def mean(data):
+			return sum(data) / float(len(data)) if data else 0.0
+
+if sys.version_info[0] < 3:
+	FileNotFoundError = IOError
+	PermissionError = OSError
+
+def which_compat(cmd):
+	if hasattr(shutil, 'which'):
+		return shutil.which(cmd)
+	for path in os.environ.get("PATH", "").split(os.pathsep):
+		full = os.path.join(path, cmd)
+		if os.access(full, os.X_OK) and not os.path.isdir(full):
+			return full
+	return None
 
 def reload_config():
 	# type: () -> None
@@ -109,7 +136,7 @@ def reload_config():
 			IPMITOOL = False
 		else:
 			# validate the external command exists, or replace with False
-			ipmitool_bin = shutil.which(IPMITOOL)
+			ipmitool_bin = which_compat(IPMITOOL)
 			if ipmitool_bin is None:
 				err = "Unable to find ipmitool in system path: " + str(IPMITOOL)
 				if CONFIG_TEST:
