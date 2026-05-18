@@ -50,7 +50,7 @@ CONFIG_MAP = [
 # For command line arguments and internal state
 CONFIG_TEST = False
 PREV_CONFIG_MTIME = None
-TERSE_OUTPUT = False
+TERSE_OUTPUT = 0
 
 # Compatibility shims for Python 2.7
 try:
@@ -497,9 +497,15 @@ load_defaults(CONFIG_MAP)
 if "--configtest" in sys.argv:
 	sys.exit(config_test())
 
-# determine if we should use terse log output mode
-if "--terse-output" in sys.argv:
-	TERSE_OUTPUT = True
+# Process other command-line arguments
+for arg in sys.argv:
+	# Determine if we should use terse log output mode and its level
+	if arg.startswith("--terse-output="):
+		TERSE_OUTPUT = int(arg.split("=", 1)[1])
+		break # Option found, no need to check further
+	elif arg == "--terse-output":
+		TERSE_OUTPUT = 1
+		break # Option found, no need to check further
 
 signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
@@ -597,6 +603,16 @@ while True:
 			"B " + str(PEAK_ZONE_B_TEMP) + "'C " +
 			"/ " + str(int(AVG_ZONE_B_TEMP)) + "'C " +
 			"/ " + str(int(MAX_ZONE_B_TEMP)) + "'C\n")
+		# Terseness level 2 only shows "now" temp when it is outside the avg-max range
+		if (TERSE_OUTPUT >= 2) \
+			and (int(AVG_ZONE_A_TEMP) <= PEAK_ZONE_A_TEMP <= MAX_ZONE_A_TEMP) \
+			and (int(AVG_ZONE_B_TEMP) <= PEAK_ZONE_B_TEMP <= MAX_ZONE_B_TEMP):
+			output_line = ("Zone Temps (Avg/Max): " +
+				"A " + str(int(AVG_ZONE_A_TEMP)) + "'C " +
+				"/ " + str(int(MAX_ZONE_A_TEMP)) + "'C; " +
+				"B " + str(int(AVG_ZONE_B_TEMP)) + "'C " +
+				"/ " + str(int(MAX_ZONE_B_TEMP)) + "'C\n")
+
 		if output_line != LAST_OUTPUT_LINE:
 			sys.stdout.write(output_line);
 			sys.stdout.flush()

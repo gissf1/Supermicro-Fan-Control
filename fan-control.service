@@ -8,7 +8,7 @@ User=root
 Environment=PYTHONUNBUFFERED=1
 # Validate configuration and dependencies before starting
 ExecStartPre=/usr/bin/fan-control --configtest
-ExecStart=/usr/bin/fan-control --terse-output
+ExecStart=/usr/bin/fan-control --terse-output=2
 Restart=always
 RestartSec=5
 StandardOutput=journal
