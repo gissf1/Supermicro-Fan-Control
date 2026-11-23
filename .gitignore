@@ -1,0 +1,24 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Environment and secret files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs*
+
+# Build and cache files
+build/
+dist/
+*.py[cod]
+__pycache__/
