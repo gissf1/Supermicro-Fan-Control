@@ -55,7 +55,7 @@ to the `/etc/rc.local.d/local.sh` (or `/etc/rc.local` if that file doesn't exist
 #### Linux
 
 There are several installation methods available on Linux, depending on your distro and preferences:
-* via downloaded .deb package (recommended)
+* via downloaded .deb/.rpm package (recommended)
 * via git clone
 * manually from source (see "Manual Installation" section)
 
@@ -74,6 +74,21 @@ See the appropriate following section for your installation method.
 
 * Edit `/etc/fan-control.ini` for your system, as described in the `Configuration` section below.
 * Enable and start the service following directions described in the `Systemd Service` section below.
+
+#### RHEL / Fedora / RPM-based distributions
+
+* Download the `supermicro-fan-control` RPM for the version you want from the [GitHub Releases page](https://github.com/gissf1/Supermicro-Fan-Control/releases).
+* Install it with `dnf`; it will install Python 3 and `ipmitool` from your configured repositories if needed:
+
+  ~~~
+  sudo dnf install ./supermicro-fan-control-*.rpm
+  ~~~
+
+* Edit `/etc/fan-control.ini` for your system, as described in the `Configuration` section below.
+* Enable and start the service following directions described in the `Systemd Service` section below.
+
+RPM support is experimental. The package is architecture independent (`noarch`)
+and has not yet been validated across all RPM-based distributions.
 
 #### Ubuntu using the bundled 32-bit IPMICFG binary
 On Ubuntu systems you may need to install 32-bit execution support to use the bundled IPMICFG binary.

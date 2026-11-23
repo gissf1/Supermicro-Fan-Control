@@ -128,14 +128,32 @@ jobs:
           EOF
           dpkg-deb --root-owner-group --build build/deb supermicro-fan-control.deb
 
+      - name: Build RPM Package
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes rpm
+          mkdir -p build/rpm/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          cp fan-control.py build/rpm/SOURCES/fan-control.py
+          cp config.ini build/rpm/SOURCES/fan-control.ini
+          cp fan-control.service build/rpm/SOURCES/fan-control.service
+          rpmbuild -bb supermicro-fan-control.spec \
+            --define "_topdir $PWD/build/rpm" \
+            --define "_unitdir /usr/lib/systemd/system" \
+            --define "pkg_version ${VERSION//-/.}" \
+            --define "release_date $DATE"
+          cp build/rpm/RPMS/noarch/supermicro-fan-control-*.rpm ./
+
       - name: Generate Checksums
         run: |
           # Calculate Hash
           DEB_HASH=$(sha256sum supermicro-fan-control.deb | cut -d' ' -f1)
           echo "$DEB_HASH" > supermicro-fan-control.deb.sha256
+          RPM_HASH=$(sha256sum supermicro-fan-control-*.rpm | cut -d' ' -f1)
+          echo "$RPM_HASH" > supermicro-fan-control.rpm.sha256
 
           # store hash in Environment
           echo "DEB_HASH=$DEB_HASH" >> "$GITHUB_ENV"
+          echo "RPM_HASH=$RPM_HASH" >> "$GITHUB_ENV"
 
           # Update PKGBUILD with the actual hash of the .deb package being released
           sed -i "
@@ -158,6 +176,7 @@ jobs:
           - Based on Commit: ${{ github.sha }}
           - Previous Release: ${{ env.PREV_TAG || 'None' }} (${{ env.PREV_TAG_HASH }})
           - deb Package SHA256: ${{ env.DEB_HASH }}
+          - RPM Package SHA256: ${{ env.RPM_HASH }}
 
           ## Changes in this release
           EOF
@@ -186,10 +205,13 @@ jobs:
           files: |
             supermicro-fan-control.deb
             supermicro-fan-control.deb.sha256
+            supermicro-fan-control-*.rpm
+            supermicro-fan-control.rpm.sha256
             fan-control.py
             config.ini
             PKGBUILD
             supermicro-fan-control.ebuild
+            supermicro-fan-control.spec
             ${{ env.CHANGELOG }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
