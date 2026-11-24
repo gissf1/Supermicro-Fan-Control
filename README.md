@@ -71,7 +71,9 @@ See the appropriate following section for your installation method.
 * Enable and start the service following directions described in the `Systemd Service` section below.
 
 #### Ubuntu using the bundled 32-bit IPMICFG binary
-On Ubuntu systems you may need to install 32-bit execution support, `sudo su` to root and run the following;
+On Ubuntu systems you may need to install 32-bit execution support to use the bundled IPMICFG binary.
+
+`sudo su` to root and run the following;
 
 ~~~
 dpkg --add-architecture i386
@@ -82,13 +84,7 @@ apt-get install multiarch-support
 
 Next, find a suitable place for the scripts to live such as `/opt/FanControl/` (you may need to create that dir).
 
-Modern Ubuntu uses systemd for services, so I suggest installing the included systemd service file as described in the `Systemd Service Installation` section below.  If you prefer to use cron, you can also load it via the system cron, as described below:
-
-Run `crontab -e` and add the following line;
-
-~~~
-@reboot /opt/FanControl/daemon.sh
-~~~
+Finally, you need to setup your system to start the service on system startup.  Modern Ubuntu uses systemd for services, so I suggest installing the included systemd service file as described in the `Systemd Service` section below.  If you prefer to use cron, you can also load it via the system cron, as described below in the `Cron` section.
 
 #### Linux (via git clone)
 For git clone installations, I suggest first installing the ipmitool package from the operating system's repository using something like: `sudo apt-get install ipmitool`
@@ -101,23 +97,43 @@ Then, find a suitable place for the scripts to live.  I preferred `/opt/Supermic
 * edit the configuration file as needed: `nano config.ini`, ensuring the IPMITOOL is set properly
 
 Finally, choose how to start the process:
-* run `crontab -e` as under the Ubuntu example
-* install the included systemd service file as described in the `Systemd Service Installation` section below.
+* install the included systemd service file as described in the `Systemd Service` section below.
+* run `crontab -e` as under the `Cron` instructions below.
 * use another method to load and run it on startup.
 
-#### Systemd Service Installation
+#### Systemd Service
 
-You can install the systemd service to manage everything through systemd:
+The packaged version installs the service for you, so the installation part of these instructions is already done, but you still need to enable and start the service.
+
+If you did not use the packaged install method, you can manually install the systemd service to manage everything through systemd.  The example below assumes the files are in `/opt/Supermicro-Fan-Control`; adjust paths if you installed them elsewhere.
+
+Run the following commands as root:
 
 ~~~bash
+ln -s /opt/Supermicro-Fan-Control/fan-control.py /usr/bin/fan-control
 ln -s /opt/Supermicro-Fan-Control/fan-control.service /etc/systemd/system/fan-control.service
 systemctl daemon-reload
-systemctl enable --now fan-control
+~~~
+
+Then enable and start the service:
+
+~~~bash
+sudo systemctl enable --now fan-control
 ~~~
 
 To check the status or logs:
 * `systemctl status fan-control`
 * `journalctl -u fan-control -f`
+
+#### Cron
+
+Systemd is the recommended startup option on distributions that provide it; see the `Systemd Service` section above.
+
+To proceed with loading the tool via cron, edit root's crontab with `sudo crontab -e` and add this line, adjusting the path if the tool is installed somewhere other than `/opt/Supermicro-Fan-Control`:
+
+~~~
+@reboot /opt/Supermicro-Fan-Control/daemon.sh
+~~~
 
 
 Hardware fan assignments
