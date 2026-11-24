@@ -48,6 +48,28 @@ to the `/etc/rc.local.d/local.sh` (or `/etc/rc.local` if that file doesn't exist
 /vmfs/volumes/datastore1/tools/FanControl/daemon.sh
 ~~~
 
+#### Linux
+
+There are several installation methods available on Linux, depending on your distro and preferences:
+* via downloaded .deb package (recommended)
+* via git clone
+
+Package installation is the easiest method to begin using this tool.
+
+See the appropriate following section for your installation method.
+
+#### Proxmox / Debian / Ubuntu (via downloaded .deb package)
+
+* Download the `.deb` package for the version you want from the [GitHub Releases page](https://github.com/gissf1/Supermicro-Fan-Control/releases).
+* Install the downloaded package with `apt-get`; it will install dependencies from your configured repositories if needed:
+
+  ~~~
+  sudo apt-get install ./supermicro-fan-control.deb
+  ~~~
+
+* Edit `/etc/fan-control.ini` for your system.
+* Enable and start the service following directions described in the `Systemd Service` section below.
+
 #### Ubuntu using the bundled 32-bit IPMICFG binary
 On Ubuntu systems you may need to install 32-bit execution support, `sudo su` to root and run the following;
 
@@ -68,16 +90,11 @@ Run `crontab -e` and add the following line;
 @reboot /opt/FanControl/daemon.sh
 ~~~
 
-#### Proxmox / Debian
-On Proxmox systems, I would suggest installing the ipmitool package from the operating system's repository:
+#### Linux (via git clone)
+For git clone installations, I suggest first installing the ipmitool package from the operating system's repository using something like: `sudo apt-get install ipmitool`
 
-~~~
-sudo apt-get install ipmitool
-~~~
-
-Then, similar to Ubuntu instructions above, find a suitable place for the scripts to live such as `/opt/FanControl/`.  Personally I preferred `/opt/Supermicro-Fan-Control` because then I could just:
-* login as root
-* install git: `apt-get install git`
+Then, find a suitable place for the scripts to live.  I preferred `/opt/Supermicro-Fan-Control` because then I could just do this to install:
+* install git: `sudo apt-get install git`
 * change directory to `/opt/`: `cd /opt`
 * clone the repository: `git clone 'https://github.com/jasongaunt/Supermicro-Fan-Control.git'`
 * change directory to `/opt/Supermicro-Fan-Control`: `cd Supermicro-Fan-Control`
