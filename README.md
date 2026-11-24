@@ -15,6 +15,10 @@ prevent rapidly changing fan speeds aka yo-yo'ing (which annoys those nearby and
 I wrote this tool for use with VMware ESXi on a Supermicro X8SIL-F but it should work on other x86/x64 \*nix systems and
 hopefully all Supermicro X8 / X9 / X10 / X11 boards with IPMI. I have personally tested it on the following;
 
+I updated the original version of this tool to make many improvements, but the original author has not yet responded to my pull requests after more than 7 months.  As such, I have decided to fork the tool and maintain it myself.  The original version of this tool was at: https://github.com/jasongaunt/Supermicro-Fan-Control  If, at some point, he communicates with me or accepts my pull requests, we can discuss merging codebases at that time.
+
+Also, I have owned several SuperMicro systems, but I have no other affiliation with SuperMicro, and this is clearly NOT an officially sanctioned tool, so read the disclaimer above and know that disclaimer applies to everything in this repository.
+
 #### Hardware
 * Supermicro X9DRi-LN4+
 * Supermicro X8SIL-F (IPMI equipped variant)
@@ -93,7 +97,7 @@ For git clone installations, I suggest first installing the ipmitool package fro
 Then, find a suitable place for the scripts to live.  I preferred `/opt/Supermicro-Fan-Control` because then I could just do this to install:
 * install git: `sudo apt-get install git`
 * change directory to `/opt/`: `cd /opt`
-* clone the repository: `git clone 'https://github.com/jasongaunt/Supermicro-Fan-Control.git'`
+* clone the repository: `git clone 'https://github.com/gissf1/Supermicro-Fan-Control.git'`
 * change directory to `/opt/Supermicro-Fan-Control`: `cd Supermicro-Fan-Control`
 * edit the configuration file as needed: `nano config.ini`, ensuring the IPMITOOL is set properly
 
