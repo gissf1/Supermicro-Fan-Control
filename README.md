@@ -38,7 +38,7 @@ a certain RPM or worse, dies completely. In this eventuality the fans will defau
 
 Installation
 ------------
-#### VMware
+#### VMware ESXi
 On VMware these scripts should work straight out of the box, they do however require a persistent datastore to live on.
 
 Place the files in something along the lines of `/vmfs/volumes/datastore1/tools/FanControl/` and then add the following
@@ -48,7 +48,7 @@ to the `/etc/rc.local.d/local.sh` (or `/etc/rc.local` if that file doesn't exist
 /vmfs/volumes/datastore1/tools/FanControl/daemon.sh
 ~~~
 
-#### Ubuntu
+#### Ubuntu using the bundled 32-bit IPMICFG binary
 On Ubuntu systems you may need to install 32-bit execution support, `sudo su` to root and run the following;
 
 ~~~
