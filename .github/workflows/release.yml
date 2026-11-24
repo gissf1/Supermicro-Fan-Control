@@ -163,7 +163,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: "${{ github.ref_type == 'tag' && github.ref_name || format('test-{0}-{1}', env.DATE, env.SHORT_SHA) }}"
-          name: "${{ github.ref_type == 'tag' && github.ref_name || format('Test Build: {0}', github.ref_name) }}"
+          name: "${{ github.ref_type == 'tag' && github.ref_name || format('Test Build: {0} ~{1}', github.ref_name, env.SHORT_SHA) }}"
           body_path: "${{ env.CHANGELOG }}"
           target_commitish: "${{ github.sha }}"
           draft: ${{ env.DRAFT == 'true' }}
