@@ -70,13 +70,26 @@ jobs:
           echo "PREV_TAG: $PREV_TAG"
           echo "PREV_TAG_HASH: $PREV_TAG_HASH"
 
+          # start with the tag/branch name triggering the GitHub Action (GITHUB_REF_NAME)
           VERSION="${GITHUB_REF_NAME#v}"
           VERSION=$( sed -r "s/^release-test\$//g" <<< "$VERSION" )
           if [ -z "$VERSION" ]; then
+            # only branch commits should trigger this code
             if [[ "$PREV_TAG" =~ ^v([0-9]+\.[0-9]+)\. ]]; then
-              VERSION="${VERSION:-${BASH_REMATCH[1]}.${DATE}-1~${SHORT_SHA}}"
+              VERSION_PREFIX="${BASH_REMATCH[1]}.${DATE}"
             else
-              VERSION="${VERSION:-0.0.${DATE}-1~${SHORT_SHA}}"
+              # without any previous tag, use "0.0." by default
+              VERSION_PREFIX="0.0.${DATE}"
+
+            # ensure we have an incrementing package release suffix for each date
+            VERSION_SUFFIX=1
+            VERSION_BASE="${VERSION_PREFIX}-${VERSION_SUFFIX}"
+            while git tag --list "v${VERSION_BASE}~*" | grep -q .; do
+              VERSION_SUFFIX=$((VERSION_SUFFIX + 1))
+              VERSION_BASE="${VERSION_PREFIX}-${VERSION_SUFFIX}"
+            done
+            # ensure the version string has a trailing SHA hash for branch releases
+            VERSION="${VERSION_BASE}~${SHORT_SHA}"
             fi
           fi
           echo "VERSION: $VERSION"
