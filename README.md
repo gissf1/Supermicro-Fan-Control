@@ -53,6 +53,7 @@ to the `/etc/rc.local.d/local.sh` (or `/etc/rc.local` if that file doesn't exist
 There are several installation methods available on Linux, depending on your distro and preferences:
 * via downloaded .deb package (recommended)
 * via git clone
+* manually from source (see "Manual Installation" section)
 
 Package installation is the easiest method to begin using this tool.
 
@@ -101,6 +102,13 @@ Finally, choose how to start the process:
 * run `crontab -e` as under the `Cron` instructions below.
 * use another method to load and run it on startup.
 
+#### Manual Installation
+
+* Download the source archive for the version you want from the [GitHub Releases page](https://github.com/gissf1/Supermicro-Fan-Control/releases).
+* Extract the archive into a directory of your choice.
+* Edit `config.ini` and set `IPMITOOL` to the IPMI utility you want to use.
+* Set up startup using the `Systemd Service` or `Cron` section below.
+
 #### Systemd Service
 
 The packaged version installs the service for you, so the installation part of these instructions is already done, but you still need to enable and start the service.
@@ -128,6 +136,8 @@ To check the status or logs:
 #### Cron
 
 Systemd is the recommended startup option on distributions that provide it; see the `Systemd Service` section above.
+
+For a git clone or manual installation, cron is an available alternative.
 
 To proceed with loading the tool via cron, edit root's crontab with `sudo crontab -e` and add this line, adjusting the path if the tool is installed somewhere other than `/opt/Supermicro-Fan-Control`:
 
