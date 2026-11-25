@@ -72,7 +72,7 @@ See the appropriate following section for your installation method.
   sudo apt-get install ./supermicro-fan-control.deb
   ~~~
 
-* Edit `/etc/fan-control.ini` for your system.
+* Edit `/etc/fan-control.ini` for your system, as described in the `Configuration` section below.
 * Enable and start the service following directions described in the `Systemd Service` section below.
 
 #### Ubuntu using the bundled 32-bit IPMICFG binary
@@ -89,17 +89,17 @@ apt-get install multiarch-support
 
 Next, find a suitable place for the scripts to live such as `/opt/FanControl/` (you may need to create that dir).
 
+Set `IPMITOOL = False` in the active configuration file to select the bundled IPMICFG binary, as described in the `Configuration` section below.
+
 Finally, you need to setup your system to start the service on system startup.  Modern Ubuntu uses systemd for services, so I suggest installing the included systemd service file as described in the `Systemd Service` section below.  If you prefer to use cron, you can also load it via the system cron, as described below in the `Cron` section.
 
 #### Linux (via git clone)
-For git clone installations, I suggest first installing the ipmitool package from the operating system's repository using something like: `sudo apt-get install ipmitool`
-
-Then, find a suitable place for the scripts to live.  I preferred `/opt/Supermicro-Fan-Control` because then I could just do this to install:
+Find a suitable place for the scripts to live.  I preferred `/opt/Supermicro-Fan-Control` because then I could just do this to install:
 * install git: `sudo apt-get install git`
 * change directory to `/opt/`: `cd /opt`
 * clone the repository: `git clone 'https://github.com/gissf1/Supermicro-Fan-Control.git'`
 * change directory to `/opt/Supermicro-Fan-Control`: `cd Supermicro-Fan-Control`
-* edit the configuration file as needed: `nano config.ini`, ensuring the IPMITOOL is set properly
+* edit the configuration file as needed: `nano config.ini`, ensuring the IPMITOOL is set properly as described in the `Configuration` section below.
 
 Finally, choose how to start the process:
 * install the included systemd service file as described in the `Systemd Service` section below.
@@ -110,7 +110,7 @@ Finally, choose how to start the process:
 
 * Download the source archive for the version you want from the [GitHub Releases page](https://github.com/gissf1/Supermicro-Fan-Control/releases).
 * Extract the archive into a directory of your choice.
-* Edit `config.ini` and set `IPMITOOL` to the IPMI utility you want to use.
+* Edit `config.ini` and set `IPMITOOL` to the IPMI utility you want to use as described in the `Configuration` section below.
 * Set up startup using the `Systemd Service` or `Cron` section below.
 
 #### Systemd Service
@@ -187,6 +187,20 @@ the rest of the case, we can control heat better by keeping those fans at a fast
 
 Configuration
 -------------
+#### Configuration file and IPMI tool
+
+Package installations use `/etc/fan-control.ini`. For source installations, the program checks `/etc/fan-control.ini` first, then `config.ini` in the directory containing `fan-control.py`. If both files exist, the `/etc` file takes priority.
+
+Set `IPMITOOL` in the active configuration file to the command or path of the IPMI utility you want to use. Any installation type can use any available IPMI utility.
+
+Package installations depend on and use the distribution's `ipmitool` package by default. For other installation types, your distribution's `ipmitool` package is the simplest option to install an IPMI utility. For example, on Debian or Ubuntu, install it with:
+
+~~~
+sudo apt-get install ipmitool
+~~~
+
+You can also install another external IPMI utility separately and set `IPMITOOL` to its command or path. Source installations can alternatively use the bundled IPMICFG binary by setting `IPMITOOL = False`.
+
 #### Sensor test options
 
 The Sensor Name Search option allows you to select a sensor if it contains this value (case-insensitive). "CPU" (without the quotes)
