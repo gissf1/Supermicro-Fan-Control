@@ -77,11 +77,14 @@ jobs:
           VERSION=$( sed -r "s/^release-test\$//g" <<< "$VERSION" )
           if [ -z "$VERSION" ]; then
             # only branch commits should trigger this code
+            echo "PREV_TAG: $PREV_TAG"
             if [[ "$PREV_TAG" =~ ^v([0-9]+\.[0-9]+)\. ]]; then
               VERSION_PREFIX="${BASH_REMATCH[1]}.${DATE}"
             else
               # without any previous tag, use "0.0." by default
               VERSION_PREFIX="0.0.${DATE}"
+            fi
+            echo "VERSION_PREFIX: $VERSION_PREFIX"
 
             # ensure we have an incrementing package release suffix for each date
             VERSION_SUFFIX=1
@@ -90,11 +93,12 @@ jobs:
               VERSION_SUFFIX=$((VERSION_SUFFIX + 1))
               VERSION_BASE="${VERSION_PREFIX}-${VERSION_SUFFIX}"
             done
+            echo "VERSION_BASE: $VERSION_BASE"
             # ensure the version string has a trailing SHA hash for branch releases
             VERSION="${VERSION_BASE}~${SHORT_SHA}"
-            fi
           fi
           echo "VERSION: $VERSION"
+          echo "DEBUG_TEST: 1"
 
           # store values in Environment
           echo "DRAFT=$DRAFT" >> "$GITHUB_ENV"
